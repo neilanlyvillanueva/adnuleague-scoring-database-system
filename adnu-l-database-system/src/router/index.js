@@ -1,8 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Dashboard from '../views/dashboard/Dashboard.vue'
 
-// For now, we'll use placeholder components for the others 
-// or you can create the files in your views folder
 const routes = [
   {
     path: '/',
@@ -16,12 +14,22 @@ const routes = [
   {
     path: '/events',
     name: 'Events',
-    component: () => import('../views/events/Events.vue') 
+    component: () => import('../views/events/Events.vue')
   },
   {
     path: '/teams',
     name: 'Teams',
     component: () => import('../views/teams/Teams.vue')
+  },
+  {
+    path: '/matches',
+    name: 'Matches',
+    component: () => import('../views/matches/Matches.vue')
+  },
+  {
+    path: '/leaderboard',
+    name: 'Leaderboard',
+    component: () => import('../views/leaderboard/Leaderboard.vue')
   }
 ]
 

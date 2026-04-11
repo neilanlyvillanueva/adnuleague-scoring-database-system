@@ -8,9 +8,9 @@ const dynamicData = reactive({
 const navItems = ref([
   { name: 'Dashboard', path: '/dashboard', icon: 'fas fa-th-large' },
   { name: 'Events', path: '/events', icon: 'fas fa-clipboard-list' },
-  { name: 'Teams', path: '/teams', icon: 'fas fa-chart-line' },
-  { name: 'Scoring', path: '/scoring', icon: 'fas fa-users-cog' },
-  { name: 'Matches', path: '/matches', icon: 'fas fa-sliders-h' },
+  { name: 'Teams', path: '/teams', icon: 'fas fa-users' },
+  { name: 'Matches', path: '/matches', icon: 'fas fa-trophy' },
+  { name: 'Leaderboard', path: '/leaderboard', icon: 'fas fa-chart-bar' },
   { name: 'History', path: '/history', icon: 'fas fa-history' }
 ]);
 
