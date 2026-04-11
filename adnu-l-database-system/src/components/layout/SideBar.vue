@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive } from 'vue';
+import { ref, reactive, computed } from 'vue';
 
 const dynamicData = reactive({
   systemTitle: 'ADNL S3',
@@ -17,6 +17,9 @@ const navItems = ref([
 const isModalOpen = ref(false);
 const currentEditingKey = ref('');
 const tempEditValue = ref('');
+
+// Collapsed state for sidebar
+const isCollapsed = ref(false);
 
 const openEditModal = (key) => {
   currentEditingKey.value = key;
@@ -36,22 +39,34 @@ const saveEdit = () => {
 const handleLogout = () => {
   console.log("Logging out...");
 };
+
+// Emit collapsed state to parent
+const emit = defineEmits(['collapse-change']);
+
+const toggleCollapse = () => {
+  isCollapsed.value = !isCollapsed.value;
+  emit('collapse-change', isCollapsed.value);
+};
 </script>
 
 <template>
-  <aside class="sidebar">
+  <aside :class="['sidebar', { collapsed: isCollapsed }]">
     <div class="sidebar-header">
       <div class="brand-title" @click="openEditModal('System Title')">
-        <h2>{{ dynamicData.systemTitle }} <span class="edit-icon"><i class="fa-solid fa-pen-to-square"></i></span></h2>
+        <h2 v-if="!isCollapsed">{{ dynamicData.systemTitle }} <span class="edit-icon"><i class="fa-solid fa-pen-to-square"></i></span></h2>
+        <h2 v-else @click.stop="toggleCollapse" class="collapse-toggle"><i class="fa-solid fa-bars"></i></h2>
       </div>
+      <button v-if="!isCollapsed" class="collapse-btn" @click="toggleCollapse" title="Collapse Sidebar">
+        <i class="fa-solid fa-chevron-left"></i>
+      </button>
     </div>
 
     <nav class="sidebar-nav">
       <ul>
         <li v-for="item in navItems" :key="item.name">
-          <router-link :to="item.path" class="nav-link">
+          <router-link :to="item.path" class="nav-link" :title="isCollapsed ? item.name : ''">
             <i :class="item.icon"></i>
-            <span>{{ item.name }}</span>
+            <span v-if="!isCollapsed">{{ item.name }}</span>
           </router-link>
         </li>
       </ul>
@@ -60,25 +75,25 @@ const handleLogout = () => {
     <div class="flex-spacer"></div>
 
     <div class="sidebar-footer">
-      <div class="footer-divider"></div>
-      <button class="logout-btn" @click="handleLogout">
+      <div class="footer-divider" v-if="!isCollapsed"></div>
+      <button class="logout-btn" @click="handleLogout" :title="isCollapsed ? 'Exit' : ''">
         <i class="fas fa-sign-out-alt"></i>
-        <span>Exit</span>
+        <span v-if="!isCollapsed">Exit</span>
       </button>
     </div>
 
     <div v-if="isModalOpen" class="modal-overlay" @click.self="closeModal">
       <div class="modal-content">
         <h3>Edit {{ currentEditingKey }}</h3>
-        <input 
-          v-model="tempEditValue" 
-          type="text" 
+        <input
+          v-model="tempEditValue"
+          type="text"
           class="modal-input"
           @keyup.enter="saveEdit"
         />
         <div class="modal-actions">
             <button class="btn-ghost" @click="closeModal">Cancel</button>
-  
+
              <button class="btn-primary" @click="saveEdit">Save</button>
         </div>
       </div>
@@ -100,10 +115,31 @@ const handleLogout = () => {
   font-family: var(--font-main);
   box-shadow: var(--shadow-md);
   border-radius: 0 10px 10px 0;
+  transition: width 0.3s ease;
+  z-index: 100;
+}
+
+.sidebar.collapsed {
+  width: 70px;
 }
 
 .sidebar-header {
-  padding: 30px 24px 70px 24px;
+  padding: 20px 24px 20px 24px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebar.collapsed .sidebar-header {
+  padding: 20px 10px 20px 10px;
+  justify-content: center;
+}
+
+.brand-title {
+  display: flex;
+  align-items: center;
+  flex: 1;
 }
 
 .brand-title h2 {
@@ -116,11 +152,54 @@ const handleLogout = () => {
   justify-content: space-between;
   text-transform: uppercase;
   letter-spacing: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sidebar.collapsed .brand-title h2 {
+  justify-content: center;
+}
+
+.brand-title h2.collapse-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brand-title h2.collapse-toggle i {
+  font-size: 1.2rem;
+  color: var(--adnu-blue-light);
+}
+
+/* Collapse Toggle Button */
+.collapse-btn {
+  background: transparent;
+  border: none;
+  color: var(--adnu-blue-light);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.collapse-btn:hover {
+  opacity: 1;
+  background-color: var(--adnu-blue-dark);
+}
+
+.sidebar.collapsed .collapse-btn {
+  display: none;
 }
 
 /* Centering Logic */
 .flex-spacer {
-  flex-grow: 1; /* These div tags swallow the extra space */
+  flex-grow: 1;
 }
 
 .sidebar-nav {
@@ -141,6 +220,13 @@ const handleLogout = () => {
   text-decoration: none;
   transition: all 0.3s ease;
   font-size: 1rem;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sidebar.collapsed .nav-link {
+  padding: 16px 10px;
+  justify-content: center;
 }
 
 .nav-link i {
@@ -148,12 +234,21 @@ const handleLogout = () => {
   font-size: 1.1rem;
   width: 24px;
   text-align: center;
+  flex-shrink: 0;
+}
+
+.sidebar.collapsed .nav-link i {
+  margin-right: 0;
 }
 
 .nav-link:hover {
   background-color: var(--adnu-blue-dark);
   color: var(--white);
-  padding-left: 28px; /* Subtle slide effect */
+  padding-left: 28px;
+}
+
+.sidebar.collapsed .nav-link:hover {
+  padding-left: 10px;
 }
 
 .router-link-active {
@@ -176,15 +271,27 @@ const handleLogout = () => {
   background-color: var(--adnu-gold);
 }
 
+.sidebar.collapsed .router-link-active span::after {
+  display: none;
+}
+
+.sidebar.collapsed .router-link-active {
+  border-left: 3px solid var(--adnu-gold);
+}
+
 /* Footer & Logout Alignment */
 .sidebar-footer {
   padding: 0 24px 30px 24px;
 }
 
+.sidebar.collapsed .sidebar-footer {
+  padding: 0 10px 30px 10px;
+}
+
 .footer-divider {
   height: 1px;
   background-color: var(--border-color);
-  opacity: 0.15; /* Very subtle line */
+  opacity: 0.15;
   margin-bottom: 20px;
 }
 
@@ -200,21 +307,33 @@ const handleLogout = () => {
   font-family: var(--font-main);
   font-size: 1rem;
   transition: color 0.3s ease;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sidebar.collapsed .logout-btn {
+  justify-content: center;
+  padding: 12px 10px;
 }
 
 .logout-btn i {
   margin-right: 16px;
   width: 24px;
+  flex-shrink: 0;
+}
+
+.sidebar.collapsed .logout-btn i {
+  margin-right: 0;
 }
 
 .logout-btn:hover {
   color: var(--adnu-danger);
 }
 
-.brand-title i:hover { 
-    color: var(--adnu-gold); 
+.brand-title i:hover {
+    color: var(--adnu-gold);
 }
-.edit-icon { 
+.edit-icon {
     font-size: 0.8rem; opacity: 0.3;
  }
 
@@ -224,7 +343,7 @@ const handleLogout = () => {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(0, 31, 92, 0.7); /* adnu-blue-navy with opacity */
+  background: rgba(0, 31, 92, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -271,31 +390,31 @@ const handleLogout = () => {
   gap: 12px;
 }
 
-.btn-save { 
-    background: var(--adnu-blue-light); 
-    color: var(--adnu-blue-dark); 
-    border: none; 
-    padding: 8px 16px; 
-    border-radius: 4px; 
-    cursor: pointer; 
+.btn-save {
+    background: var(--adnu-blue-light);
+    color: var(--adnu-blue-dark);
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
 }
 
-.btn-cancel { 
-    background: var(--adnu-danger); 
+.btn-cancel {
+    background: var(--adnu-danger);
     color: var(--adnu-live-red);
     border: 1px solid var(--adnu-danger);
-    padding: 8px 16px; 
-    border-radius: 4px; 
-    cursor: pointer; 
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
 }
 
-.btn-save:hover { 
-    color: var(--adnu-blue-light); 
+.btn-save:hover {
+    color: var(--adnu-blue-light);
     background: var(--adnu-blue-dark);
 }
 
-.btn-cancel:hover { 
-    background: var(--adnu-danger-strong); 
+.btn-cancel:hover {
+    background: var(--adnu-danger-strong);
     color: var(--white);
 }
 </style>

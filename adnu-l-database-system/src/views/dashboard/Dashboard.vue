@@ -69,6 +69,9 @@ const saveEdit = () => {
     <div class="stat-info">
       <h3>Completion</h3>
       <p class="stat-number">65%</p>
+      <div class="progress-bar-mini">
+        <div class="progress-fill" style="width: 65%"></div>
+      </div>
     </div>
   </div>
 

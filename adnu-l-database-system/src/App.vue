@@ -1,13 +1,20 @@
 <script setup>
 import SideBar from './components/layout/SideBar.vue';
 import router from './router';
+import { ref } from 'vue';
+
+const isSidebarCollapsed = ref(false);
+
+const handleSidebarCollapse = (collapsed) => {
+  isSidebarCollapsed.value = collapsed;
+};
 </script>
 
 <template>
   <div class="app-layout">
-    <SideBar />
+    <SideBar @collapse-change="handleSidebarCollapse" />
 
-    <main class="main-body">
+    <main :class="['main-body', { 'sidebar-collapsed': isSidebarCollapsed }]">
       <router-view />
     </main>
   </div>
@@ -22,12 +29,16 @@ import router from './router';
 
 .main-body {
   flex-grow: 1;
-  /* Match the SideBar.vue width exactly */
-  margin-left: 260px; 
+  margin-left: 260px;
   background-color: var(--bg-gray-light);
   min-height: 100vh;
-  /* Added padding so dashboard content doesn't hit the screen edges */
-  padding: 40px; 
+  padding: 40px;
   box-sizing: border-box;
+  transition: margin-left 0.3s ease;
+}
+
+/* Collapsed sidebar state */
+.main-body.sidebar-collapsed {
+  margin-left: 70px;
 }
 </style>
