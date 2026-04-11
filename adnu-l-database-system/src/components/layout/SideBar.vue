@@ -186,6 +186,7 @@ const toggleCollapse = () => {
   transition: all 0.2s ease;
   opacity: 0.7;
   flex-shrink: 0;
+  margin-left: 8px;
 }
 
 .collapse-btn:hover {
@@ -335,6 +336,7 @@ const toggleCollapse = () => {
 }
 .edit-icon {
     font-size: 0.8rem; opacity: 0.3;
+    margin-left: 15px;
  }
 
 .modal-overlay {

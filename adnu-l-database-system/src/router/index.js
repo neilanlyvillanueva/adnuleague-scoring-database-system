@@ -13,11 +13,11 @@ const routes = [
     name: 'Dashboard',
     component: Dashboard
   },
-//   {
-//     path: '/events',
-//     name: 'Events',
-//     component: () => import('../views/events/Events.vue') // Lazy loaded
-//   },
+  {
+    path: '/events',
+    name: 'Events',
+    component: () => import('../views/events/Events.vue') 
+  },
   {
     path: '/teams',
     name: 'Teams',
