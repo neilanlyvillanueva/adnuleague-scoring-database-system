@@ -1,5 +1,7 @@
 import { reactive, readonly, computed } from 'vue';
 
+const API_BASE_URL = 'http://localhost:5000';
+
 const state = reactive({
   user: null,
   isAuthenticated: false,
@@ -8,40 +10,61 @@ const state = reactive({
 
 export const userRole = computed(() => state.user?.role || null);
 
-const login = (username, password, role) => {
+const login = async (username, password, role) => {
   state.isLoading = true;
 
-  // Simulate API call - in production, this would hit your backend
-  return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      // Simple validation - in production, validate against backend
-      if (username && password && role) {
-        state.user = {
-          id: 1,
-          username: username,
-          role: role
-        };
-        state.isAuthenticated = true;
-        state.isLoading = false;
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ username, password, role })
+    });
 
-        // Persist to localStorage
-        localStorage.setItem('adnl_user', JSON.stringify(state.user));
-        localStorage.setItem('adnl_auth', 'true');
+    const data = await response.json();
 
-        resolve(state.user);
-      } else {
-        state.isLoading = false;
-        reject(new Error('Invalid credentials'));
-      }
-    }, 500);
-  });
+    if (!response.ok) {
+      state.isLoading = false;
+      throw new Error(data.error || 'Login failed');
+    }
+
+    state.user = data.user;
+    state.isAuthenticated = true;
+    state.isLoading = false;
+
+    // Persist to localStorage
+    localStorage.setItem('adnl_user', JSON.stringify(state.user));
+    localStorage.setItem('adnl_auth', 'true');
+    localStorage.setItem('adnl_token', data.access_token);
+
+    return state.user;
+  } catch (error) {
+    state.isLoading = false;
+    throw error;
+  }
 };
 
-const logout = () => {
-  state.user = null;
-  state.isAuthenticated = false;
-  localStorage.removeItem('adnl_user');
-  localStorage.removeItem('adnl_auth');
+const logout = async () => {
+  try {
+    const token = localStorage.getItem('adnl_token');
+    if (token) {
+      await fetch(`${API_BASE_URL}/auth/logout`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Logout error:', error);
+  } finally {
+    state.user = null;
+    state.isAuthenticated = false;
+    localStorage.removeItem('adnl_user');
+    localStorage.removeItem('adnl_auth');
+    localStorage.removeItem('adnl_token');
+  }
 };
 
 const checkAuth = () => {

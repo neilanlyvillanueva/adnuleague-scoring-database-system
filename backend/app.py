@@ -1,19 +1,26 @@
 from flask import Flask
+from flask_cors import CORS
+from flask_jwt_extended import JWTManager
+from config import Config
 from routes import register_routes
-import os
 
-app = Flask(__name__)
+def create_app():
+    app = Flask(__name__)
+    app.config.from_object(Config)
 
-# Database configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URI', 'postgresql://postgres:password@localhost:5000/adnu_intramurals')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    # Initialize extensions
+    CORS(app, resources={r"/*": {"origins": "*"}})
+    jwt = JWTManager(app)
 
-# Register routes
-register_routes(app)
+    # Register routes
+    register_routes(app)
 
-@app.route('/')
-def index():
-    return {'message': 'ADNU League Intramurals Scoring System API'}
+    @app.route('/')
+    def index():
+        return {'message': 'ADNU League Intramurals Scoring System API'}
+
+    return app
 
 if __name__ == '__main__':
+    app = create_app()
     app.run(debug=True)
