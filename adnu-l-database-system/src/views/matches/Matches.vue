@@ -6,7 +6,7 @@ import { useAuth } from '../../composables/useAuth';
 const { userRole } = useAuth();
 const isAdmin = computed(() => userRole.value === 'admin');
 
-const { state, addMatch, updateMatch, finalizeMatch, deleteMatch, updateTeamWins, getLeaderboard } = useStore();
+const { state, addMatch, updateMatch, finalizeMatch, deleteMatch, updateTeamWins, getLeaderboard, scoringSystems } = useStore();
 
 const showModal = ref(false);
 const showFinalizeModal = ref(false);
@@ -17,7 +17,6 @@ const editMatchId = ref(null);
 // Form for creating new match
 const matchForm = reactive({
   eventId: null,
-  matchupType: '1v1',
   teamAId: null,
   teamBId: null,
   participants: [],
@@ -27,7 +26,8 @@ const matchForm = reactive({
 // Form for finalizing match
 const finalizeForm = reactive({
   scores: {},
-  setScores: []
+  setScores: [],
+  criteriaScores: {} // For criteria-based judging
 });
 
 const selectedMatch = ref(null);
@@ -37,12 +37,22 @@ const getParticipatingTeams = (eventId) => {
   return state.teams.filter(t => t.participatingSports?.includes(eventId));
 };
 
+// Get selected event
+const selectedEvent = computed(() => {
+  return matchForm.eventId ? state.events.find(e => e.id === matchForm.eventId) : null;
+});
+
+// Get scoring system for an event
+const getScoringSystem = (eventId) => {
+  const event = state.events.find(e => e.id === eventId);
+  return state.scoringSystems.find(s => s.id === event?.scoringSystemId);
+};
+
 const openMatchModal = (match = null) => {
   if (match) {
     isEditing.value = true;
     editMatchId.value = match.id;
     matchForm.eventId = match.eventId;
-    matchForm.matchupType = match.matchupType;
     matchForm.teamAId = match.teamAId;
     matchForm.teamBId = match.teamBId;
     matchForm.participants = match.participants || [];
@@ -50,7 +60,6 @@ const openMatchModal = (match = null) => {
   } else {
     isEditing.value = false;
     matchForm.eventId = null;
-    matchForm.matchupType = '1v1';
     matchForm.teamAId = null;
     matchForm.teamBId = null;
     matchForm.participants = [];
@@ -62,21 +71,40 @@ const openMatchModal = (match = null) => {
 const openFinalizeModal = (match) => {
   selectedMatch.value = match;
   const event = state.events.find(e => e.id === match.eventId);
+  const scoringSystem = state.scoringSystems.find(s => s.id === event?.scoringSystemId);
 
   finalizeForm.scores = {};
   finalizeForm.setScores = [];
+  finalizeForm.criteriaScores = {};
+
+  // Check if event requires criteria-based scoring (IDs 6 or 7)
+  const requiresCriteria = scoringSystem?.requiresCriteria || (event?.criteria && event.criteria.length > 0);
 
   if (match.matchupType === '1v1') {
     finalizeForm.scores.teamA = 0;
     finalizeForm.scores.teamB = 0;
+    if (requiresCriteria && event?.criteria) {
+      finalizeForm.criteriaScores.teamA = {};
+      finalizeForm.criteriaScores.teamB = {};
+      event.criteria.forEach(criteria => {
+        finalizeForm.criteriaScores.teamA[criteria.name] = 0;
+        finalizeForm.criteriaScores.teamB[criteria.name] = 0;
+      });
+    }
   } else {
     match.participants?.forEach(p => {
       finalizeForm.scores[p] = 0;
+      if (requiresCriteria && event?.criteria) {
+        finalizeForm.criteriaScores[p] = {};
+        event.criteria.forEach(criteria => {
+          finalizeForm.criteriaScores[p][criteria.name] = 0;
+        });
+      }
     });
   }
 
-  // Initialize set scores if threshold incremental
-  if (event?.thresholdIncremental && event.sets) {
+  // Initialize set scores if threshold incremental (scoring system ID 4)
+  if (scoringSystem?.id === 4 && event?.sets) {
     for (let i = 0; i < event.sets; i++) {
       if (match.matchupType === '1v1') {
         finalizeForm.setScores.push({ set: i + 1, teamA: 0, teamB: 0 });
@@ -112,8 +140,9 @@ const saveMatch = () => {
 
   const event = state.events.find(e => e.id === matchForm.eventId);
   const participatingTeams = getParticipatingTeams(matchForm.eventId);
+  const matchupType = event?.matchupSystem || '1v1';
 
-  if (matchForm.matchupType === '1v1') {
+  if (matchupType === '1v1') {
     if (!matchForm.teamAId || !matchForm.teamBId) {
       alert('Please select both teams');
       return;
@@ -131,12 +160,12 @@ const saveMatch = () => {
 
   const matchData = {
     eventId: matchForm.eventId,
-    matchupType: matchForm.matchupType,
+    matchupType,
     teamAId: matchForm.teamAId,
     teamBId: matchForm.teamBId,
     participants: matchForm.participants,
     venue: matchForm.venue,
-    scores: matchForm.matchupType === '1v1' ? { teamA: 0, teamB: 0 } : {},
+    scores: matchupType === '1v1' ? { teamA: 0, teamB: 0 } : {},
     status: 'ongoing'
   };
 
@@ -167,6 +196,96 @@ const submitFinalScores = () => {
   // 7: Judge Based (FFA) - highest judge score wins
   // 8: Win/Lose (FFA) - binary win (1 or 0)
 
+  // Check if criteria-based scoring is required (IDs 6 or 7, or event has criteria)
+  const requiresCriteria = scoringSystem?.requiresCriteria || (event?.criteria && event.criteria.length > 0);
+
+  // Criteria-Based Scoring (IDs 6, 7 or event has criteria)
+  if (requiresCriteria && event?.criteria) {
+    // Validate that total does not exceed 100
+    if (match.matchupType === '1v1') {
+      let teamATotal = 0;
+      let teamBTotal = 0;
+
+      event.criteria.forEach(criteria => {
+        teamATotal += parseInt(finalizeForm.criteriaScores.teamA?.[criteria.name] || 0);
+        teamBTotal += parseInt(finalizeForm.criteriaScores.teamB?.[criteria.name] || 0);
+      });
+
+      if (teamATotal > 100) {
+        alert(`Total score for ${getTeamName(match.teamAId)} exceeds 100 (Current: ${teamATotal}). Please adjust criteria scores.`);
+        return;
+      }
+      if (teamBTotal > 100) {
+        alert(`Total score for ${getTeamName(match.teamBId)} exceeds 100 (Current: ${teamBTotal}). Please adjust criteria scores.`);
+        return;
+      }
+
+      winner = teamATotal > teamBTotal ? match.teamAId : match.teamBId;
+
+      finalizeMatch(match.id, {
+        scores: { teamA: teamATotal, teamB: teamBTotal },
+        criteriaScores: finalizeForm.criteriaScores,
+        status: 'completed',
+        winner
+      });
+
+      if (winner) {
+        updateTeamWins(winner, 1);
+      }
+    } else {
+      // FFA with criteria - validate totals
+      const totals = {};
+      let maxScore = -1;
+
+      match.participants?.forEach(p => {
+        totals[p] = 0;
+        event.criteria.forEach(criteria => {
+          totals[p] += parseInt(finalizeForm.criteriaScores[p]?.[criteria.name] || 0);
+        });
+        if (totals[p] > 100) {
+          alert(`Total score for ${getTeamName(p)} exceeds 100 (Current: ${totals[p]}). Please adjust criteria scores.`);
+          return;
+        }
+        if (totals[p] > maxScore) {
+          maxScore = totals[p];
+          winner = p;
+        }
+      });
+
+      // Check if any validation failed (winner would be null if alert was shown)
+      if (match.participants?.some(p => {
+        const total = event.criteria.reduce((sum, c) => sum + (parseInt(finalizeForm.criteriaScores[p]?.[c.name] || 0)), 0);
+        return total > 100;
+      })) {
+        return;
+      }
+
+      match.participants?.forEach(p => {
+        totals[p] = 0;
+        event.criteria.forEach(criteria => {
+          totals[p] += parseInt(finalizeForm.criteriaScores[p]?.[criteria.name] || 0);
+        });
+        if (totals[p] > maxScore) {
+          maxScore = totals[p];
+          winner = p;
+        }
+      });
+
+      finalizeMatch(match.id, {
+        scores: totals,
+        criteriaScores: finalizeForm.criteriaScores,
+        status: 'completed',
+        winner
+      });
+
+      if (winner) {
+        updateTeamWins(winner, 1);
+      }
+    }
+    closeModal();
+    return;
+  }
+
   // Threshold Incremental (Set-based) - ID 4
   if (scoringSystem?.id === 4 && finalizeForm.setScores.length > 0) {
     if (match.matchupType === '1v1') {
@@ -190,6 +309,49 @@ const submitFinalScores = () => {
       if (winner) {
         updateTeamWins(winner, 1);
       }
+    } else {
+      // FFA with sets
+      const totals = {};
+      match.participants?.forEach(p => {
+        totals[p] = 0;
+        finalizeForm.setScores.forEach(set => {
+          let maxScore = -1;
+          let setWinner = null;
+          match.participants?.forEach(part => {
+            if (set[part] > maxScore) {
+              maxScore = set[part];
+              setWinner = part;
+            }
+          });
+          if (setWinner) {
+            totals[setWinner] = (totals[setWinner] || 0) + 1;
+          }
+        });
+      });
+
+      let maxWins = -1;
+      match.participants?.forEach(p => {
+        if (totals[p] > maxWins) {
+          maxWins = totals[p];
+          winner = p;
+        }
+      });
+
+      const finalScores = {};
+      match.participants?.forEach(p => {
+        finalScores[p] = finalizeForm.setScores.reduce((sum, set) => sum + (set[p] || 0), 0);
+      });
+
+      finalizeMatch(match.id, {
+        scores: finalScores,
+        setScores: finalizeForm.setScores,
+        status: 'completed',
+        winner
+      });
+
+      if (winner) {
+        updateTeamWins(winner, 1);
+      }
     }
     return;
   }
@@ -199,8 +361,6 @@ const submitFinalScores = () => {
     const scoreA = parseInt(finalizeForm.scores.teamA) || 0;
     const scoreB = parseInt(finalizeForm.scores.teamB) || 0;
 
-    // Ranked Time (FFA) ID 5 - lowest time/score wins
-    // Note: For 1v1 Timed Incremental, highest score wins (like basketball)
     winner = scoreA > scoreB ? match.teamAId : match.teamBId;
 
     finalizeMatch(match.id, {
@@ -239,9 +399,8 @@ const submitFinalScores = () => {
     return;
   }
 
-  // Criteria Based (FFA) ID 6, Judge Based (FFA) ID 7, Win/Lose (FFA) ID 8
-  // Ranked Incremental (FFA) ID 3 - highest score wins
-  // For all these, highest score/time/value wins
+  // Ranked Incremental (FFA) ID 3, Win/Lose (FFA) ID 8
+  // Highest score wins
   let maxScore = -1;
   match.participants?.forEach(p => {
     const score = parseInt(finalizeForm.scores[p]) || 0;
@@ -282,6 +441,35 @@ const toggleParticipant = (teamId) => {
 const getTeamName = (id) => state.teams.find(t => t.id === id)?.name || 'Unknown';
 const getTeamColor = (id) => state.teams.find(t => t.id === id)?.color || '#ccc';
 const getEventName = (id) => state.events.find(e => e.id === id)?.name || 'Unknown';
+
+// Calculate total criteria score for a team/participant
+const calculateCriteriaTotal = (teamOrParticipant) => {
+  if (!selectedMatch.value) return 0;
+  const event = state.events.find(e => e.id === selectedMatch.value.eventId);
+  if (!event?.criteria) return 0;
+
+  return event.criteria.reduce((total, criteria) => {
+    const score = finalizeForm.criteriaScores[teamOrParticipant]?.[criteria.name] || 0;
+    return total + (parseInt(score) || 0);
+  }, 0);
+};
+
+// Validate individual criteria input (ensure it doesn't exceed the criteria's max points)
+const validateCriteriaInput = (event, teamOrParticipant, criteriaName) => {
+  const selectedEvent = state.events.find(e => e.id === selectedMatch.value?.eventId);
+  const criteria = selectedEvent?.criteria?.find(c => c.name === criteriaName);
+  const maxPoints = criteria?.points || 100;
+  const currentValue = parseInt(event.target.value) || 0;
+
+  if (currentValue > maxPoints) {
+    event.target.value = maxPoints;
+    finalizeForm.criteriaScores[teamOrParticipant][criteriaName] = maxPoints;
+  }
+  if (currentValue < 0) {
+    event.target.value = 0;
+    finalizeForm.criteriaScores[teamOrParticipant][criteriaName] = 0;
+  }
+};
 
 const ongoingMatches = computed(() => state.matches.filter(m => m.status === 'ongoing'));
 const completedMatches = computed(() => state.matches.filter(m => m.status === 'completed'));
@@ -428,28 +616,20 @@ const completedMatches = computed(() => state.matches.filter(m => m.status === '
             <select v-model="matchForm.eventId" class="modal-input">
               <option value="" disabled>Select an event...</option>
               <option v-for="event in state.events" :key="event.id" :value="event.id">
-                {{ event.name }} ({{ event.matchupSystem }})
+                {{ event.name }}
               </option>
             </select>
           </div>
 
-          <div class="form-group">
+          <div v-if="selectedEvent" class="form-group">
             <label>Matchup Type</label>
-            <div class="toggle-group">
-              <button
-                type="button"
-                :class="['toggle-btn', { active: matchForm.matchupType === '1v1' }]"
-                @click="matchForm.matchupType = '1v1'"
-              >
+            <div class="matchup-display">
+              <span v-if="selectedEvent.matchupSystem === '1v1'" class="matchup-badge">
                 <i class="fas fa-versus"></i> 1v1 (Head-to-Head)
-              </button>
-              <button
-                type="button"
-                :class="['toggle-btn', { active: matchForm.matchupType === 'free-for-all' }]"
-                @click="matchForm.matchupType = 'free-for-all'"
-              >
+              </span>
+              <span v-else class="matchup-badge ffa">
                 <i class="fas fa-users"></i> Free-for-All
-              </button>
+              </span>
             </div>
           </div>
 
@@ -459,7 +639,7 @@ const completedMatches = computed(() => state.matches.filter(m => m.status === '
           </div>
 
           <!-- Team Selection for 1v1 -->
-          <div v-if="matchForm.matchupType === '1v1' && matchForm.eventId" class="team-selection">
+          <div v-if="selectedEvent?.matchupSystem === '1v1'" class="team-selection">
             <div class="form-row">
               <div class="form-group flex-1">
                 <label>Team A</label>
@@ -485,7 +665,7 @@ const completedMatches = computed(() => state.matches.filter(m => m.status === '
           </div>
 
           <!-- Team Selection for Free-for-All -->
-          <div v-if="matchForm.matchupType === 'free-for-all' && matchForm.eventId" class="team-selection">
+          <div v-if="selectedEvent?.matchupSystem === 'free-for-all'" class="team-selection">
             <label>Select Participants</label>
             <div class="participant-selectors">
               <div v-for="team in getParticipatingTeams(matchForm.eventId)"
@@ -519,7 +699,7 @@ const completedMatches = computed(() => state.matches.filter(m => m.status === '
         </div>
 
         <div class="modal-form-body">
-          <div v-if="selectedMatch && state.events.find(e => e.id === selectedMatch.eventId)?.scoringSystemId === 4"
+          <div v-if="selectedMatch && getScoringSystem(selectedMatch.eventId)?.id === 4"
                class="set-scores-section">
             <h4>Set Scores</h4>
 
@@ -560,7 +740,74 @@ const completedMatches = computed(() => state.matches.filter(m => m.status === '
             </div>
           </div>
 
-          <!-- Regular Scores (non-set based) -->
+          <!-- Criteria-Based Scoring -->
+          <div v-else-if="selectedMatch && (getScoringSystem(selectedMatch.eventId)?.requiresCriteria || state.events.find(e => e.id === selectedMatch.eventId)?.criteria?.length > 0)"
+               class="criteria-scores-section">
+            <h4>Criteria Scores</h4>
+            <p class="criteria-instruction">Rate each participant/team on the following criteria. Total score must not exceed 100 points.</p>
+
+            <!-- 1v1 Criteria Scores -->
+            <div v-if="selectedMatch.matchupType === '1v1'">
+              <div v-for="criteria in state.events.find(e => e.id === selectedMatch.eventId)?.criteria"
+                   :key="criteria.name" class="criteria-row">
+                <div class="criteria-label">
+                  <span class="criteria-name">{{ criteria.name }}</span>
+                  <span class="criteria-max">(Max: {{ criteria.points }} pts)</span>
+                </div>
+                <div class="criteria-inputs">
+                  <div class="team-input">
+                    <span class="team-label">{{ getTeamName(selectedMatch.teamAId) }}</span>
+                    <input type="number" v-model.number="finalizeForm.criteriaScores.teamA[criteria.name]"
+                           class="score-input" :max="criteria.points" min="0" @input="validateCriteriaInput($event, 'teamA', criteria.name)">
+                  </div>
+                  <div class="team-input">
+                    <span class="team-label">{{ getTeamName(selectedMatch.teamBId) }}</span>
+                    <input type="number" v-model.number="finalizeForm.criteriaScores.teamB[criteria.name]"
+                           class="score-input" :max="criteria.points" min="0" @input="validateCriteriaInput($event, 'teamB', criteria.name)">
+                  </div>
+                </div>
+              </div>
+              <div class="criteria-summary">
+                <strong>Total Scores:</strong>
+                <span :class="{ 'text-danger': calculateCriteriaTotal('teamA') > 100 }">
+                  {{ getTeamName(selectedMatch.teamAId) }}: {{ calculateCriteriaTotal('teamA') }}
+                  <span v-if="calculateCriteriaTotal('teamA') > 100" class="over-limit">(Exceeds 100!)</span>
+                </span>
+                <span :class="{ 'text-danger': calculateCriteriaTotal('teamB') > 100 }">
+                  {{ getTeamName(selectedMatch.teamBId) }}: {{ calculateCriteriaTotal('teamB') }}
+                  <span v-if="calculateCriteriaTotal('teamB') > 100" class="over-limit">(Exceeds 100!)</span>
+                </span>
+              </div>
+            </div>
+
+            <!-- FFA Criteria Scores -->
+            <div v-else>
+              <div v-for="criteria in state.events.find(e => e.id === selectedMatch.eventId)?.criteria"
+                   :key="criteria.name" class="criteria-row">
+                <div class="criteria-label">
+                  <span class="criteria-name">{{ criteria.name }}</span>
+                  <span class="criteria-max">(Max: {{ criteria.points }} pts)</span>
+                </div>
+                <div class="ffa-criteria-inputs">
+                  <div v-for="participantId in selectedMatch.participants" :key="participantId" class="team-input">
+                    <span class="team-label">{{ getTeamName(participantId) }}</span>
+                    <input type="number" v-model.number="finalizeForm.criteriaScores[participantId][criteria.name]"
+                           class="score-input" :max="criteria.points" min="0" @input="validateCriteriaInput($event, participantId, criteria.name)">
+                  </div>
+                </div>
+              </div>
+              <div class="criteria-summary">
+                <strong>Total Scores:</strong>
+                <span v-for="participantId in selectedMatch.participants" :key="participantId"
+                      :class="{ 'text-danger': calculateCriteriaTotal(participantId) > 100 }">
+                  {{ getTeamName(participantId) }}: {{ calculateCriteriaTotal(participantId) }}
+                  <span v-if="calculateCriteriaTotal(participantId) > 100" class="over-limit">(Exceeds 100!)</span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Regular Scores (non-set based, non-criteria) -->
           <div v-else class="regular-scores-section">
             <h4>Final Scores</h4>
 
@@ -935,29 +1182,27 @@ const completedMatches = computed(() => state.matches.filter(m => m.status === '
   border-color: var(--adnu-blue-dark);
 }
 
-/* Toggle Group */
-.toggle-group {
+/* Matchup Display Badge */
+.matchup-display {
   display: flex;
   gap: 10px;
 }
 
-.toggle-btn {
-  flex: 1;
-  padding: 12px 16px;
-  background: var(--bg-gray-light);
-  border: 1px solid var(--border-color);
+.matchup-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--adnu-blue-light);
+  color: var(--adnu-blue-dark);
   border-radius: var(--radius-md);
-  cursor: pointer;
   font-weight: 600;
-  color: var(--text-muted);
-  transition: all 0.2s;
-  font-family: var(--font-main);
+  font-size: 0.9rem;
 }
 
-.toggle-btn.active {
-  background: var(--adnu-blue-dark);
-  color: var(--white);
-  border-color: var(--adnu-blue-dark);
+.matchup-badge.ffa {
+  background: #FFF9E6;
+  color: #B8860B;
 }
 
 /* Team Selection */
@@ -1019,11 +1264,89 @@ const completedMatches = computed(() => state.matches.filter(m => m.status === '
 
 /* Set Scores */
 .set-scores-section h4,
-.regular-scores-section h4 {
+.regular-scores-section h4,
+.criteria-scores-section h4 {
   font-size: 0.9rem;
   color: var(--adnu-blue-navy);
   margin: 0 0 15px 0;
   font-weight: 700;
+}
+
+.criteria-instruction {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 15px;
+}
+
+.criteria-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: var(--bg-gray-light);
+  border-radius: var(--radius-md);
+  margin-bottom: 10px;
+}
+
+.criteria-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.criteria-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-main);
+}
+
+.criteria-max {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.text-danger {
+  color: var(--adnu-danger);
+  font-weight: 700;
+}
+
+.over-limit {
+  color: var(--adnu-danger);
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin-left: 4px;
+}
+
+.criteria-inputs {
+  display: flex;
+  gap: 15px;
+  flex: 1;
+}
+
+.ffa-criteria-inputs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+.criteria-summary {
+  display: flex;
+  gap: 20px;
+  padding: 12px;
+  background: var(--adnu-blue-light);
+  border-radius: var(--radius-md);
+  margin-top: 10px;
+}
+
+.criteria-summary strong {
+  color: var(--adnu-blue-navy);
+}
+
+.criteria-summary span {
+  font-weight: 600;
+  color: var(--text-main);
 }
 
 .set-row {

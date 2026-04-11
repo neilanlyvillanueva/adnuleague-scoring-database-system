@@ -125,6 +125,7 @@ export function useStore() {
   };
 
   const getScoringSystem = (id) => state.scoringSystems.find(s => s.id === id);
+  const getScoringSystems = () => state.scoringSystems;
 
   // Teams
   const addTeam = (team) => {
@@ -216,12 +217,14 @@ export function useStore() {
 
   return {
     state: readonly(state),
+    scoringSystems: readonly(state.scoringSystems),
     addEvent,
     updateEvent,
     deleteEvent,
     getEvent,
     addScoringSystem,
     getScoringSystem,
+    getScoringSystems,
     addTeam,
     updateTeam,
     deleteTeam,
