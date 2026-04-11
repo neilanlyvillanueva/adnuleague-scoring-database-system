@@ -1,22 +1,31 @@
 <script setup>
 import SideBar from './components/layout/SideBar.vue';
 import router from './router';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
+import { useRoute } from 'vue-router';
 
+const route = useRoute();
 const isSidebarCollapsed = ref(false);
 
 const handleSidebarCollapse = (collapsed) => {
   isSidebarCollapsed.value = collapsed;
 };
+
+// Check if current route is login page (hide sidebar)
+const isLoginPage = computed(() => route.path === '/login');
 </script>
 
 <template>
   <div class="app-layout">
-    <SideBar @collapse-change="handleSidebarCollapse" />
+    <SideBar v-if="!isLoginPage" @collapse-change="handleSidebarCollapse" />
 
-    <main :class="['main-body', { 'sidebar-collapsed': isSidebarCollapsed }]">
+    <main
+      v-if="!isLoginPage"
+      :class="['main-body', { 'sidebar-collapsed': isSidebarCollapsed }]"
+    >
       <router-view />
     </main>
+    <router-view v-else />
   </div>
 </template>
 
@@ -40,5 +49,11 @@ const handleSidebarCollapse = (collapsed) => {
 /* Collapsed sidebar state */
 .main-body.sidebar-collapsed {
   margin-left: 70px;
+}
+
+/* Login page - full screen, no sidebar */
+body:has(.login-page) {
+  margin: 0;
+  padding: 0;
 }
 </style>

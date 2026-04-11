@@ -1,8 +1,12 @@
 <script setup>
-import { ref, reactive } from 'vue';
+import { ref, reactive, computed } from 'vue';
 import PageHeader from '../../components/common/PageHeader.vue';
-import BaseModal from '../../components/common/BaseModal.vue';
+import BaseModal from '../../components/modals/BaseModal.vue';
 import { useStore } from '../../composables/useStore';
+import { useAuth } from '../../composables/useAuth';
+
+const { userRole } = useAuth();
+const isAdmin = computed(() => userRole.value === 'admin');
 
 const { state, addTeam, updateTeam, deleteTeam, toggleTeamSportParticipation } = useStore();
 
@@ -78,7 +82,7 @@ const isParticipating = (teamId, sportId) => {
       subtitle="Manage participating colleges and their representative colors."
     >
       <template #actions>
-        <button class="btn-primary" @click="openTeamModal()">
+        <button v-if="isAdmin" class="btn-primary" @click="openTeamModal()">
           <i class="fas fa-plus"></i> Register New Team
         </button>
       </template>
@@ -112,11 +116,11 @@ const isParticipating = (teamId, sportId) => {
           </div>
         </div>
         <div class="team-card-actions">
-          <button class="btn-icon participation" @click="openParticipationModal(team)" title="Manage Sport Participation">
+          <button v-if="isAdmin" class="btn-icon participation" @click="openParticipationModal(team)" title="Manage Sport Participation">
             <i class="fas fa-clipboard-check"></i>
           </button>
-          <button class="btn-icon edit" @click="openTeamModal(team)"><i class="fas fa-edit"></i></button>
-          <button class="btn-icon delete" @click="deleteTeamHandler(team.id)"><i class="fas fa-trash-alt"></i></button>
+          <button v-if="isAdmin" class="btn-icon edit" @click="openTeamModal(team)"><i class="fas fa-edit"></i></button>
+          <button v-if="isAdmin" class="btn-icon delete" @click="deleteTeamHandler(team.id)"><i class="fas fa-trash-alt"></i></button>
         </div>
       </div>
     </div>

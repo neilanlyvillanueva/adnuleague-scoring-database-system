@@ -1,6 +1,10 @@
 <script setup>
 import { ref, reactive, computed } from 'vue';
 import { useStore } from '../../composables/useStore';
+import { useAuth } from '../../composables/useAuth';
+
+const { userRole } = useAuth();
+const isAdmin = computed(() => userRole.value === 'admin');
 
 const { state, addMatch, updateMatch, finalizeMatch, deleteMatch, updateTeamWins, getLeaderboard } = useStore();
 
@@ -304,7 +308,7 @@ const completedMatches = computed(() => state.matches.filter(m => m.status === '
         <p>Create and manage matches, input scores, and finalize results.</p>
       </div>
       <div class="header-actions">
-        <button class="btn-primary" @click="openMatchModal()">
+        <button v-if="isAdmin" class="btn-primary" @click="openMatchModal()">
           <i class="fas fa-plus"></i> Create New Match
         </button>
       </div>
@@ -356,7 +360,7 @@ const completedMatches = computed(() => state.matches.filter(m => m.status === '
             <button class="btn-sm btn-primary" @click="openFinalizeModal(match)">
               <i class="fas fa-check"></i> Finalize
             </button>
-            <button class="btn-sm btn-ghost" @click="deleteMatchHandler(match.id)">
+            <button v-if="isAdmin" class="btn-sm btn-ghost" @click="deleteMatchHandler(match.id)">
               <i class="fas fa-trash"></i>
             </button>
           </div>
@@ -512,7 +516,7 @@ const completedMatches = computed(() => state.matches.filter(m => m.status === '
 
         <div class="modal-actions">
           <button class="btn-ghost" @click="closeModal">Cancel</button>
-          <button class="btn-primary" @click="saveMatch">Create Match</button>
+          <button v-if="isAdmin" class="btn-primary" @click="saveMatch">Create Match</button>
         </div>
       </div>
     </div>
@@ -836,15 +840,17 @@ const completedMatches = computed(() => state.matches.filter(m => m.status === '
 /* No Matches */
 .no-matches {
   grid-column: 1 / -1;
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
   padding: 60px 20px;
   color: var(--text-muted);
 }
 
 .no-matches i {
   font-size: 3rem;
-  display: block;
-  margin-bottom: 12px;
   opacity: 0.5;
 }
 

@@ -1,18 +1,35 @@
 <script setup>
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { useAuth } from '../../composables/useAuth';
+
+const router = useRouter();
+const { logout, userRole } = useAuth();
 
 const dynamicData = reactive({
-  systemTitle: 'ADNL S3',
+  systemTitle: localStorage.getItem('adnl_system_title') || 'ADNL S3',
 });
 
-const navItems = ref([
-  { name: 'Dashboard', path: '/dashboard', icon: 'fas fa-th-large' },
-  { name: 'Events', path: '/events', icon: 'fas fa-clipboard-list' },
-  { name: 'Teams', path: '/teams', icon: 'fas fa-users' },
-  { name: 'Matches', path: '/matches', icon: 'fas fa-trophy' },
-  { name: 'Leaderboard', path: '/leaderboard', icon: 'fas fa-chart-bar' },
-  { name: 'History', path: '/history', icon: 'fas fa-history' }
+const isAdmin = computed(() => userRole.value === 'admin');
+
+const saveSystemTitle = () => {
+  if (dynamicData.systemTitle.trim() !== '') {
+    localStorage.setItem('adnl_system_title', dynamicData.systemTitle.trim());
+  }
+};
+
+const allNavItems = ref([
+  { name: 'Dashboard', path: '/dashboard', icon: 'fas fa-th-large', roles: ['admin', 'tabulation'] },
+  { name: 'Events', path: '/events', icon: 'fas fa-clipboard-list', roles: ['admin', 'tabulation'] },
+  { name: 'Teams', path: '/teams', icon: 'fas fa-users', roles: ['admin', 'tabulation'] },
+  { name: 'Matches', path: '/matches', icon: 'fas fa-trophy', roles: ['admin', 'tabulation'] },
+  { name: 'Leaderboard', path: '/leaderboard', icon: 'fas fa-chart-bar', roles: ['admin', 'tabulation'] },
+  { name: 'History', path: '/history', icon: 'fas fa-history', roles: ['admin', 'tabulation'] }
 ]);
+
+const visibleNavItems = computed(() => {
+  return allNavItems.value.filter(item => item.roles.includes(userRole.value));
+});
 
 const isModalOpen = ref(false);
 const currentEditingKey = ref('');
@@ -31,13 +48,15 @@ const closeModal = () => { isModalOpen.value = false; };
 
 const saveEdit = () => {
   if (tempEditValue.value.trim() !== '') {
-    dynamicData[currentEditingKey.value] = tempEditValue.value;
+    dynamicData.systemTitle = tempEditValue.value;
+    saveSystemTitle();
   }
   closeModal();
 };
 
 const handleLogout = () => {
-  console.log("Logging out...");
+  logout();
+  router.push('/login');
 };
 
 // Emit collapsed state to parent
@@ -52,8 +71,11 @@ const toggleCollapse = () => {
 <template>
   <aside :class="['sidebar', { collapsed: isCollapsed }]">
     <div class="sidebar-header">
-      <div class="brand-title" @click="openEditModal('System Title')">
-        <h2 v-if="!isCollapsed">{{ dynamicData.systemTitle }} <span class="edit-icon"><i class="fa-solid fa-pen-to-square"></i></span></h2>
+      <div class="brand-title" @click="isAdmin ? openEditModal('System Title') : null">
+        <h2 v-if="!isCollapsed">
+          {{ dynamicData.systemTitle }}
+          <span v-if="isAdmin" class="edit-icon"><i class="fa-solid fa-pen-to-square"></i></span>
+        </h2>
         <h2 v-else @click.stop="toggleCollapse" class="collapse-toggle"><i class="fa-solid fa-bars"></i></h2>
       </div>
       <button v-if="!isCollapsed" class="collapse-btn" @click="toggleCollapse" title="Collapse Sidebar">
@@ -63,7 +85,7 @@ const toggleCollapse = () => {
 
     <nav class="sidebar-nav">
       <ul>
-        <li v-for="item in navItems" :key="item.name">
+        <li v-for="item in visibleNavItems" :key="item.name">
           <router-link :to="item.path" class="nav-link" :title="isCollapsed ? item.name : ''">
             <i :class="item.icon"></i>
             <span v-if="!isCollapsed">{{ item.name }}</span>

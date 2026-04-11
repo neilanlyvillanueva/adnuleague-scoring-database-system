@@ -1,6 +1,10 @@
 <script setup>
 import { ref, reactive, computed } from 'vue';
 import { useStore } from '../../composables/useStore';
+import { useAuth } from '../../composables/useAuth';
+
+const { userRole } = useAuth();
+const isAdmin = computed(() => userRole.value === 'admin');
 
 const { state, addEvent, updateEvent, deleteEvent, addScoringSystem } = useStore();
 
@@ -125,10 +129,10 @@ const saveScoringSystem = () => {
         <p>Organize competition categories and specific contest rules.</p>
       </div>
       <div class="header-actions">
-        <button class="btn-ghost" @click="openScoringModal()">
+        <button v-if="isAdmin" class="btn-ghost" @click="openScoringModal()">
           <i class="fas fa-cog"></i> Manage Scoring
         </button>
-        <button class="btn-primary" @click="openEventModal()">
+        <button v-if="isAdmin" class="btn-primary" @click="openEventModal()">
           <i class="fas fa-plus"></i> Create New Event
         </button>
       </div>
@@ -170,8 +174,8 @@ const saveScoringSystem = () => {
           </div>
           <div class="event-footer">
             <div class="action-group">
-              <button class="btn-icon edit" @click="openEventModal(event)"><i class="fas fa-edit"></i></button>
-              <button class="btn-icon delete" @click="deleteEventHandler(event.id)"><i class="fas fa-trash-alt"></i></button>
+              <button v-if="isAdmin" class="btn-icon edit" @click="openEventModal(event)"><i class="fas fa-edit"></i></button>
+              <button v-if="isAdmin" class="btn-icon delete" @click="deleteEventHandler(event.id)"><i class="fas fa-trash-alt"></i></button>
             </div>
           </div>
         </div>
