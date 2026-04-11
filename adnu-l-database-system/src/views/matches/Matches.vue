@@ -1,164 +1,101 @@
 <script setup>
-import { ref, reactive, computed } from 'vue';
+import { ref, computed } from 'vue';
 import { useStore } from '../../composables/useStore';
+import MatchModal from '../../components/modals/MatchModal.vue';
+import FinalizeMatchModal from '../../components/modals/FinalizeMatchModal.vue';
+import MatchCard from '../../components/cards/MatchCard.vue';
 
-const { state, addMatch, updateMatch, finalizeMatch, deleteMatch, updateTeamWins, getLeaderboard } = useStore();
+const { state, addMatch, updateMatch, finalizeMatch, deleteMatch, updateTeamWins } = useStore();
 
 const showModal = ref(false);
 const showFinalizeModal = ref(false);
-const showScoreModal = ref(false);
-const isEditing = ref(false);
-const editMatchId = ref(null);
-
-// Form for creating new match
-const matchForm = reactive({
-  eventId: null,
-  matchupType: '1v1',
-  teamAId: null,
-  teamBId: null,
-  participants: [],
-  venue: ''
-});
-
-// Form for finalizing match
-const finalizeForm = reactive({
-  scores: {},
-  setScores: []
-});
-
+const editingMatch = ref(null);
 const selectedMatch = ref(null);
 
-// Get teams participating in a specific event
-const getParticipatingTeams = (eventId) => {
-  return state.teams.filter(t => t.participatingSports?.includes(eventId));
-};
+const ongoingMatches = computed(() => state.matches.filter(m => m.status === 'ongoing'));
+const completedMatches = computed(() => state.matches.filter(m => m.status === 'completed'));
+
+const getEvent = (eventId) => state.events.find(e => e.id === eventId);
 
 const openMatchModal = (match = null) => {
-  if (match) {
-    isEditing.value = true;
-    editMatchId.value = match.id;
-    matchForm.eventId = match.eventId;
-    matchForm.matchupType = match.matchupType;
-    matchForm.teamAId = match.teamAId;
-    matchForm.teamBId = match.teamBId;
-    matchForm.participants = match.participants || [];
-    matchForm.venue = match.venue || '';
-  } else {
-    isEditing.value = false;
-    matchForm.eventId = null;
-    matchForm.matchupType = '1v1';
-    matchForm.teamAId = null;
-    matchForm.teamBId = null;
-    matchForm.participants = [];
-    matchForm.venue = '';
-  }
+  editingMatch.value = match;
   showModal.value = true;
 };
 
 const openFinalizeModal = (match) => {
   selectedMatch.value = match;
-  const event = state.events.find(e => e.id === match.eventId);
-
-  finalizeForm.scores = {};
-  finalizeForm.setScores = [];
-
-  if (match.matchupType === '1v1') {
-    finalizeForm.scores.teamA = 0;
-    finalizeForm.scores.teamB = 0;
-  } else {
-    match.participants?.forEach(p => {
-      finalizeForm.scores[p] = 0;
-    });
-  }
-
-  // Initialize set scores if threshold incremental
-  if (event?.thresholdIncremental && event.sets) {
-    for (let i = 0; i < event.sets; i++) {
-      if (match.matchupType === '1v1') {
-        finalizeForm.setScores.push({ set: i + 1, teamA: 0, teamB: 0 });
-      } else {
-        const setScore = { set: i + 1 };
-        match.participants?.forEach(p => {
-          setScore[p] = 0;
-        });
-        finalizeForm.setScores.push(setScore);
-      }
-    }
-  }
-
   showFinalizeModal.value = true;
 };
 
-const closeModal = () => {
+const closeModals = () => {
   showModal.value = false;
   showFinalizeModal.value = false;
-  showScoreModal.value = false;
+  editingMatch.value = null;
   selectedMatch.value = null;
 };
 
-const saveMatch = () => {
-  if (!matchForm.eventId) {
+const handleSaveMatch = (matchData) => {
+  // Validation
+  if (!matchData.eventId) {
     alert('Please select an event/sport');
     return;
   }
-  if (!matchForm.venue.trim()) {
+  if (!matchData.venue.trim()) {
     alert('Please enter a venue');
     return;
   }
 
-  const event = state.events.find(e => e.id === matchForm.eventId);
-  const participatingTeams = getParticipatingTeams(matchForm.eventId);
+  const participatingTeams = state.teams.filter(t => t.participatingSports?.includes(matchData.eventId));
 
-  if (matchForm.matchupType === '1v1') {
-    if (!matchForm.teamAId || !matchForm.teamBId) {
+  if (matchData.matchupType === '1v1') {
+    if (!matchData.teamAId || !matchData.teamBId) {
       alert('Please select both teams');
       return;
     }
-    if (matchForm.teamAId === matchForm.teamBId) {
+    if (matchData.teamAId === matchData.teamBId) {
       alert('Teams must be different');
       return;
     }
   } else {
-    if (matchForm.participants.length < 2) {
+    if (matchData.participants.length < 2) {
       alert('Please select at least 2 participants for Free-for-All');
       return;
     }
   }
 
-  const matchData = {
-    eventId: matchForm.eventId,
-    matchupType: matchForm.matchupType,
-    teamAId: matchForm.teamAId,
-    teamBId: matchForm.teamBId,
-    participants: matchForm.participants,
-    venue: matchForm.venue,
-    scores: matchForm.matchupType === '1v1' ? { teamA: 0, teamB: 0 } : {},
+  const newMatchData = {
+    eventId: matchData.eventId,
+    matchupType: matchData.matchupType,
+    teamAId: matchData.teamAId,
+    teamBId: matchData.teamBId,
+    participants: matchData.participants,
+    venue: matchData.venue,
+    scores: matchData.matchupType === '1v1' ? { teamA: 0, teamB: 0 } : {},
     status: 'ongoing'
   };
 
-  if (isEditing.value) {
-    updateMatch(editMatchId.value, matchData);
+  if (editingMatch.value) {
+    updateMatch(editingMatch.value.id, newMatchData);
   } else {
-    addMatch(matchData);
+    addMatch(newMatchData);
   }
 
-  closeModal();
+  closeModals();
 };
 
-const submitFinalScores = () => {
+const handleFinalizeMatch = (finalizeData) => {
   if (!selectedMatch.value) return;
 
   const match = selectedMatch.value;
   const event = state.events.find(e => e.id === match.eventId);
   let winner = null;
 
-  if (event?.thresholdIncremental && finalizeForm.setScores.length > 0) {
-    // Count set wins for 1v1
+  if (event?.thresholdIncremental && finalizeData.setScores.length > 0) {
     if (match.matchupType === '1v1') {
       let teamAWins = 0;
       let teamBWins = 0;
 
-      finalizeForm.setScores.forEach(set => {
+      finalizeData.setScores.forEach(set => {
         if (set.teamA > set.teamB) teamAWins++;
         else if (set.teamB > set.teamA) teamBWins++;
       });
@@ -167,21 +104,17 @@ const submitFinalScores = () => {
 
       finalizeMatch(match.id, {
         scores: { teamA: teamAWins, teamB: teamBWins },
-        setScores: finalizeForm.setScores,
+        setScores: finalizeData.setScores,
         status: 'completed',
         winner
       });
 
-      if (winner) {
-        updateTeamWins(winner, 1);
-      }
+      if (winner) updateTeamWins(winner, 1);
     } else {
-      // Free-for-all with sets - find participant with highest total
       const totals = {};
       match.participants?.forEach(p => {
         totals[p] = 0;
-        finalizeForm.setScores.forEach(set => {
-          // Find who won this set
+        finalizeData.setScores.forEach(set => {
           let maxScore = -1;
           let setWinner = null;
           match.participants?.forEach(part => {
@@ -196,7 +129,6 @@ const submitFinalScores = () => {
         });
       });
 
-      // Find overall winner
       let maxWins = -1;
       match.participants?.forEach(p => {
         if (totals[p] > maxWins) {
@@ -207,34 +139,27 @@ const submitFinalScores = () => {
 
       const finalScores = {};
       match.participants?.forEach(p => {
-        finalScores[p] = finalizeForm.setScores.reduce((sum, set) => sum + (set[p] || 0), 0);
+        finalScores[p] = finalizeData.setScores.reduce((sum, set) => sum + (set[p] || 0), 0);
       });
 
       finalizeMatch(match.id, {
         scores: finalScores,
-        setScores: finalizeForm.setScores,
+        setScores: finalizeData.setScores,
         status: 'completed',
         winner
       });
 
-      if (winner) {
-        updateTeamWins(winner, 1);
-      }
+      if (winner) updateTeamWins(winner, 1);
     }
   } else {
-    // Non-set based scoring
     if (match.matchupType === '1v1') {
-      const scoreA = parseInt(finalizeForm.scores.teamA) || 0;
-      const scoreB = parseInt(finalizeForm.scores.teamB) || 0;
-
-      const event = state.events.find(e => e.id === match.eventId);
-      const isTimeRanked = event?.scoringSystemId === 3; // Timed (Race)
+      const scoreA = parseInt(finalizeData.scores.teamA) || 0;
+      const scoreB = parseInt(finalizeData.scores.teamB) || 0;
+      const isTimeRanked = event?.scoringSystemId === 3;
 
       if (isTimeRanked) {
-        // Lowest time wins
         winner = scoreA < scoreB ? match.teamAId : match.teamBId;
       } else {
-        // Highest score wins
         winner = scoreA > scoreB ? match.teamAId : match.teamBId;
       }
 
@@ -244,14 +169,11 @@ const submitFinalScores = () => {
         winner
       });
 
-      if (winner) {
-        updateTeamWins(winner, 1);
-      }
+      if (winner) updateTeamWins(winner, 1);
     } else {
-      // Free-for-all - find highest score
       let maxScore = -1;
       match.participants?.forEach(p => {
-        const score = parseInt(finalizeForm.scores[p]) || 0;
+        const score = parseInt(finalizeData.scores[p]) || 0;
         if (score > maxScore) {
           maxScore = score;
           winner = p;
@@ -259,18 +181,16 @@ const submitFinalScores = () => {
       });
 
       finalizeMatch(match.id, {
-        scores: finalizeForm.scores,
+        scores: finalizeData.scores,
         status: 'completed',
         winner
       });
 
-      if (winner) {
-        updateTeamWins(winner, 1);
-      }
+      if (winner) updateTeamWins(winner, 1);
     }
   }
 
-  closeModal();
+  closeModals();
 };
 
 const deleteMatchHandler = (id) => {
@@ -278,22 +198,6 @@ const deleteMatchHandler = (id) => {
     deleteMatch(id);
   }
 };
-
-const toggleParticipant = (teamId) => {
-  const index = matchForm.participants.indexOf(teamId);
-  if (index === -1) {
-    matchForm.participants.push(teamId);
-  } else {
-    matchForm.participants.splice(index, 1);
-  }
-};
-
-const getTeamName = (id) => state.teams.find(t => t.id === id)?.name || 'Unknown';
-const getTeamColor = (id) => state.teams.find(t => t.id === id)?.color || '#ccc';
-const getEventName = (id) => state.events.find(e => e.id === id)?.name || 'Unknown';
-
-const ongoingMatches = computed(() => state.matches.filter(m => m.status === 'ongoing'));
-const completedMatches = computed(() => state.matches.filter(m => m.status === 'completed'));
 </script>
 
 <template>
@@ -317,51 +221,15 @@ const completedMatches = computed(() => state.matches.filter(m => m.status === '
         Ongoing Matches
       </h2>
       <div class="matches-grid">
-        <div v-for="match in ongoingMatches" :key="match.id" class="match-card ongoing">
-          <div class="match-header">
-            <span class="event-badge">{{ getEventName(match.eventId) }}</span>
-            <span class="venue-badge">
-              <i class="fas fa-map-marker-alt"></i> {{ match.venue }}
-            </span>
-          </div>
-
-          <div class="match-content">
-            <div v-if="match.matchupType === '1v1'" class="matchup-1v1">
-              <div class="team-side">
-                <span class="team-name" :style="{ color: getTeamColor(match.teamAId) }">
-                  {{ getTeamName(match.teamAId) }}
-                </span>
-                <span class="team-score">{{ match.scores?.teamA || 0 }}</span>
-              </div>
-              <div class="vs-divider">VS</div>
-              <div class="team-side">
-                <span class="team-name" :style="{ color: getTeamColor(match.teamBId) }">
-                  {{ getTeamName(match.teamBId) }}
-                </span>
-                <span class="team-score">{{ match.scores?.teamB || 0 }}</span>
-              </div>
-            </div>
-
-            <div v-else class="matchup-ffa">
-              <div v-for="participantId in match.participants" :key="participantId" class="ffa-participant">
-                <span class="team-name" :style="{ color: getTeamColor(participantId) }">
-                  {{ getTeamName(participantId) }}
-                </span>
-                <span class="team-score">{{ match.scores?.[participantId] || 0 }}</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="match-actions">
-            <button class="btn-sm btn-primary" @click="openFinalizeModal(match)">
-              <i class="fas fa-check"></i> Finalize
-            </button>
-            <button class="btn-sm btn-ghost" @click="deleteMatchHandler(match.id)">
-              <i class="fas fa-trash"></i>
-            </button>
-          </div>
-        </div>
-
+        <MatchCard
+          v-for="match in ongoingMatches"
+          :key="match.id"
+          :match="match"
+          :event="getEvent(match.eventId)"
+          :teams="state.teams"
+          @finalize="openFinalizeModal"
+          @delete="deleteMatchHandler"
+        />
         <div v-if="ongoingMatches.length === 0" class="no-matches">
           <i class="fas fa-calendar-times"></i>
           <p>No ongoing matches. Create a new match to get started.</p>
@@ -376,46 +244,13 @@ const completedMatches = computed(() => state.matches.filter(m => m.status === '
         Completed Matches
       </h2>
       <div class="matches-grid">
-        <div v-for="match in completedMatches" :key="match.id" class="match-card completed">
-          <div class="match-header">
-            <span class="event-badge">{{ getEventName(match.eventId) }}</span>
-            <span class="venue-badge">
-              <i class="fas fa-map-marker-alt"></i> {{ match.venue }}
-            </span>
-          </div>
-
-          <div class="match-content">
-            <div v-if="match.matchupType === '1v1'" class="matchup-1v1">
-              <div class="team-side" :class="{ winner: match.winner === match.teamAId }">
-                <span class="team-name" :style="{ color: getTeamColor(match.teamAId) }">
-                  {{ getTeamName(match.teamAId) }}
-                  <i v-if="match.winner === match.teamAId" class="fas fa-trophy winner-icon"></i>
-                </span>
-                <span class="team-score">{{ match.scores?.teamA || 0 }}</span>
-              </div>
-              <div class="vs-divider">VS</div>
-              <div class="team-side" :class="{ winner: match.winner === match.teamBId }">
-                <span class="team-name" :style="{ color: getTeamColor(match.teamBId) }">
-                  {{ getTeamName(match.teamBId) }}
-                  <i v-if="match.winner === match.teamBId" class="fas fa-trophy winner-icon"></i>
-                </span>
-                <span class="team-score">{{ match.scores?.teamB || 0 }}</span>
-              </div>
-            </div>
-
-            <div v-else class="matchup-ffa">
-              <div v-for="participantId in match.participants" :key="participantId"
-                   class="ffa-participant" :class="{ winner: match.winner === participantId }">
-                <span class="team-name" :style="{ color: getTeamColor(participantId) }">
-                  {{ getTeamName(participantId) }}
-                  <i v-if="match.winner === participantId" class="fas fa-trophy winner-icon"></i>
-                </span>
-                <span class="team-score">{{ match.scores?.[participantId] || 0 }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
+        <MatchCard
+          v-for="match in completedMatches"
+          :key="match.id"
+          :match="match"
+          :event="getEvent(match.eventId)"
+          :teams="state.teams"
+        />
         <div v-if="completedMatches.length === 0" class="no-matches">
           <i class="fas fa-inbox"></i>
           <p>No completed matches yet.</p>
@@ -423,185 +258,24 @@ const completedMatches = computed(() => state.matches.filter(m => m.status === '
       </div>
     </section>
 
-    <!-- Create/Edit Match Modal -->
-    <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
-      <div class="modal-content match-modal">
-        <div class="modal-header-section">
-          <h3>{{ isEditing ? 'Edit Match' : 'Create New Match' }}</h3>
-          <p class="modal-subtitle">Set up the match details and participants.</p>
-        </div>
+    <!-- Modals -->
+    <MatchModal
+      :show="showModal"
+      :match="editingMatch"
+      :events="state.events"
+      :teams="state.teams"
+      @close="closeModals"
+      @save="handleSaveMatch"
+    />
 
-        <div class="modal-form-body">
-          <div class="form-group">
-            <label>Select Event / Sport</label>
-            <select v-model="matchForm.eventId" class="modal-input">
-              <option value="" disabled>Select an event...</option>
-              <option v-for="event in state.events" :key="event.id" :value="event.id">
-                {{ event.name }} ({{ event.matchupSystem }})
-              </option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label>Matchup Type</label>
-            <div class="toggle-group">
-              <button
-                type="button"
-                :class="['toggle-btn', { active: matchForm.matchupType === '1v1' }]"
-                @click="matchForm.matchupType = '1v1'"
-              >
-                <i class="fas fa-versus"></i> 1v1 (Head-to-Head)
-              </button>
-              <button
-                type="button"
-                :class="['toggle-btn', { active: matchForm.matchupType === 'free-for-all' }]"
-                @click="matchForm.matchupType = 'free-for-all'"
-              >
-                <i class="fas fa-users"></i> Free-for-All
-              </button>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>Venue</label>
-            <input v-model="matchForm.venue" type="text" class="modal-input" placeholder="e.g. Main Gymnasium">
-          </div>
-
-          <!-- Team Selection for 1v1 -->
-          <div v-if="matchForm.matchupType === '1v1' && matchForm.eventId" class="team-selection">
-            <div class="form-row">
-              <div class="form-group flex-1">
-                <label>Team A</label>
-                <select v-model="matchForm.teamAId" class="modal-input">
-                  <option value="" disabled>Select Team A...</option>
-                  <option v-for="team in getParticipatingTeams(matchForm.eventId)"
-                          :key="team.id" :value="team.id">
-                    {{ team.name }}
-                  </option>
-                </select>
-              </div>
-              <div class="form-group flex-1">
-                <label>Team B</label>
-                <select v-model="matchForm.teamBId" class="modal-input">
-                  <option value="" disabled>Select Team B...</option>
-                  <option v-for="team in getParticipatingTeams(matchForm.eventId)"
-                          :key="team.id" :value="team.id">
-                    {{ team.name }}
-                  </option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <!-- Team Selection for Free-for-All -->
-          <div v-if="matchForm.matchupType === 'free-for-all' && matchForm.eventId" class="team-selection">
-            <label>Select Participants</label>
-            <div class="participant-selectors">
-              <div v-for="team in getParticipatingTeams(matchForm.eventId)"
-                   :key="team.id"
-                   :class="['participant-option', { selected: matchForm.participants.includes(team.id) }]"
-                   @click="toggleParticipant(team.id)"
-              >
-                <span class="team-dot" :style="{ backgroundColor: team.color }"></span>
-                <span class="team-name">{{ team.name }}</span>
-                <i :class="['fas', matchForm.participants.includes(team.id) ? 'fa-check-circle' : 'fa-circle']"></i>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="modal-actions">
-          <button class="btn-ghost" @click="closeModal">Cancel</button>
-          <button class="btn-primary" @click="saveMatch">Create Match</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Finalize Scores Modal -->
-    <div v-if="showFinalizeModal && selectedMatch" class="modal-overlay" @click.self="closeModal">
-      <div class="modal-content finalize-modal">
-        <div class="modal-header-section">
-          <h3>Finalize Match</h3>
-          <p class="modal-subtitle">
-            {{ getEventName(selectedMatch.eventId) }} - {{ selectedMatch.venue }}
-          </p>
-        </div>
-
-        <div class="modal-form-body">
-          <div v-if="state.events.find(e => e.id === selectedMatch.eventId)?.thresholdIncremental"
-               class="set-scores-section">
-            <h4>Set Scores</h4>
-
-            <!-- 1v1 Set Scores -->
-            <div v-if="selectedMatch.matchupType === '1v1'">
-              <div v-for="(set, index) in finalizeForm.setScores" :key="index" class="set-row">
-                <span class="set-label">Set {{ set.set }}</span>
-                <div class="set-inputs">
-                  <div class="team-input">
-                    <span class="team-label">{{ getTeamName(selectedMatch.teamAId) }}</span>
-                    <input type="number" v-model.number="set.teamA" class="score-input" min="0">
-                  </div>
-                  <span class="set-separator">-</span>
-                  <div class="team-input">
-                    <span class="team-label">{{ getTeamName(selectedMatch.teamBId) }}</span>
-                    <input type="number" v-model.number="set.teamB" class="score-input" min="0">
-                  </div>
-                </div>
-              </div>
-              <div class="set-summary">
-                <strong>Sets Won:</strong>
-                <span>{{ getTeamName(selectedMatch.teamAId) }}: {{ finalizeForm.setScores.filter(s => s.teamA > s.teamB).length }}</span>
-                <span>{{ getTeamName(selectedMatch.teamBId) }}: {{ finalizeForm.setScores.filter(s => s.teamB > s.teamA).length }}</span>
-              </div>
-            </div>
-
-            <!-- FFA Set Scores -->
-            <div v-else>
-              <div v-for="(set, index) in finalizeForm.setScores" :key="index" class="set-row ffa-set">
-                <span class="set-label">Set {{ set.set }}</span>
-                <div class="ffa-set-inputs">
-                  <div v-for="participantId in selectedMatch.participants" :key="participantId" class="team-input">
-                    <span class="team-label">{{ getTeamName(participantId) }}</span>
-                    <input type="number" v-model.number="set[participantId]" class="score-input" min="0">
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Regular Scores (non-set based) -->
-          <div v-else class="regular-scores-section">
-            <h4>Final Scores</h4>
-
-            <div v-if="selectedMatch.matchupType === '1v1'" class="score-row">
-              <div class="team-input">
-                <span class="team-label">{{ getTeamName(selectedMatch.teamAId) }}</span>
-                <input type="number" v-model.number="finalizeForm.scores.teamA" class="score-input" min="0">
-              </div>
-              <span class="score-separator">-</span>
-              <div class="team-input">
-                <span class="team-label">{{ getTeamName(selectedMatch.teamBId) }}</span>
-                <input type="number" v-model.number="finalizeForm.scores.teamB" class="score-input" min="0">
-              </div>
-            </div>
-
-            <div v-else class="ffa-scores">
-              <div v-for="participantId in selectedMatch.participants" :key="participantId" class="score-row">
-                <span class="team-label">{{ getTeamName(participantId) }}</span>
-                <input type="number" v-model.number="finalizeForm.scores[participantId]" class="score-input" min="0">
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="modal-actions">
-          <button class="btn-ghost" @click="closeModal">Cancel</button>
-          <button class="btn-primary" @click="submitFinalScores">
-            <i class="fas fa-check"></i> Confirm Results
-          </button>
-        </div>
-      </div>
-    </div>
+    <FinalizeMatchModal
+      :show="showFinalizeModal"
+      :match="selectedMatch"
+      :event="selectedMatch ? getEvent(selectedMatch.eventId) : null"
+      :teams="state.teams"
+      @close="closeModals"
+      @finalize="handleFinalizeMatch"
+    />
   </div>
 </template>
 
