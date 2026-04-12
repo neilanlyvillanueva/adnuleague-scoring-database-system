@@ -3,6 +3,5 @@ Flask-SQLAlchemy
 Flask-Migrate
 Flask-WTF
 Flask-CORS
-Flask-JWT-Extended
 psycopg2-binary
 python-dotenv

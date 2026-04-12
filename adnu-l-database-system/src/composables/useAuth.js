@@ -36,7 +36,6 @@ const login = async (username, password, role) => {
     // Persist to localStorage
     localStorage.setItem('adnl_user', JSON.stringify(state.user));
     localStorage.setItem('adnl_auth', 'true');
-    localStorage.setItem('adnl_token', data.access_token);
 
     return state.user;
   } catch (error) {
@@ -47,15 +46,9 @@ const login = async (username, password, role) => {
 
 const logout = async () => {
   try {
-    const token = localStorage.getItem('adnl_token');
-    if (token) {
-      await fetch(`${API_BASE_URL}/auth/logout`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-    }
+    await fetch(`${API_BASE_URL}/auth/logout`, {
+      method: 'POST'
+    });
   } catch (error) {
     console.error('Logout error:', error);
   }
@@ -66,7 +59,6 @@ const clearAuthState = () => {
   state.isAuthenticated = false;
   localStorage.removeItem('adnl_user');
   localStorage.removeItem('adnl_auth');
-  localStorage.removeItem('adnl_token');
 };
 
 const checkAuth = () => {
