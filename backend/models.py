@@ -11,6 +11,7 @@ class Sport(db.Model):
 
     sport_id = Column(Integer, primary_key=True)
     sport_name = Column(String(100), nullable=False)
+    sport_category = Column(String(50), default='Sports')  # Category field
     scoring_type = Column(String(50), nullable=False)  # A-H scoring types
     matchup_type = Column(String(10), nullable=False)  # '1v1' or 'FFA'
     is_lower_better = Column(Boolean, default=False)
@@ -35,6 +36,7 @@ class Sport(db.Model):
         return {
             'id': self.sport_id,
             'name': self.sport_name,
+            'category': self.sport_category or 'Sports',
             'scoringType': self.scoring_type,
             'scoringSystemId': scoring_type_map.get(self.scoring_type, 1),
             'matchupSystem': self.matchup_type,

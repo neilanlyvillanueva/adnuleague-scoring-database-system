@@ -36,6 +36,14 @@ def init_database():
         conn.commit()
         print("  - Added team_color column to team table")
 
+        # Add sport_category column if it doesn't exist
+        cur.execute("""
+            ALTER TABLE sport
+            ADD COLUMN IF NOT EXISTS sport_category VARCHAR(50) DEFAULT 'Sports'
+        """)
+        conn.commit()
+        print("  - Added sport_category column to sport table")
+
         # Drop views if they exist and recreate them
         print("Creating/recreating views...")
 

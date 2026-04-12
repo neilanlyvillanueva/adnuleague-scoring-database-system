@@ -2,7 +2,8 @@
 CREATE TABLE sport (
     sport_id SERIAL PRIMARY KEY,
     sport_name VARCHAR(100) NOT NULL,
-    scoring_type VARCHAR(50) NOT NULL, 
+    sport_category VARCHAR(50) DEFAULT 'Sports',
+    scoring_type VARCHAR(50) NOT NULL,
     matchup_type VARCHAR(10) NOT NULL,  -- '1v1' or 'FFA'
     is_lower_better BOOLEAN DEFAULT FALSE,
     total_sets_required INTEGER DEFAULT 1
@@ -29,7 +30,7 @@ CREATE TABLE sport_criteria (
 -- 3. Team Table (Identity Only)
 CREATE TABLE team (
     team_id SERIAL PRIMARY KEY,
-    team_name VARCHAR(100) UNIQUE NOT NULL
+    team_name VARCHAR(100) UNIQUE NOT NULL,
     team_color VARCHAR(20) DEFAULT '#0038A8' NOT NULL
 );
 

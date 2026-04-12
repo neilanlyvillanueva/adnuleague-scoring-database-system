@@ -50,6 +50,7 @@ def create_sport():
     name = (data.get('name') or '').strip()
     scoring_system_id = data.get('scoringSystemId')
     matchup = data.get('matchupSystem', '1v1')
+    category = data.get('category', 'Sports')
     sets = data.get('sets')
     criteria_list = data.get('criteria', [])
 
@@ -69,6 +70,7 @@ def create_sport():
 
     sport = Sport(
         sport_name=name,
+        sport_category=category,
         scoring_type=scoring_type,
         matchup_type=matchup,
         is_lower_better=data.get('isLowerBetter', False),
@@ -99,6 +101,8 @@ def update_sport(sport_id):
 
     if 'name' in data:
         sport.sport_name = data['name'].strip()
+    if 'category' in data:
+        sport.sport_category = data['category'].strip()
     if 'scoringSystemId' in data:
         scoring_type = SCORING_TYPE_MAP.get(int(data['scoringSystemId']))
         if scoring_type:

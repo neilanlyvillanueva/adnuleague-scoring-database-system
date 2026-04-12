@@ -358,6 +358,7 @@ const submitFinalScores = () => {
         updateTeamWins(winner, 1);
       }
     }
+    closeModal();
     return;
   }
 
@@ -377,6 +378,7 @@ const submitFinalScores = () => {
     if (winner) {
       updateTeamWins(winner, 1);
     }
+    closeModal();
     return;
   }
 
@@ -401,6 +403,7 @@ const submitFinalScores = () => {
     if (winner) {
       updateTeamWins(winner, 1);
     }
+    closeModal();
     return;
   }
 
