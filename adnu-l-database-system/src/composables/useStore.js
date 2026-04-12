@@ -88,11 +88,13 @@ const fetchMatches = async () => {
   loading.value.matches = true;
   try {
     const response = await axios.get('/api/games');
-    state.matches = response.data.map(match => ({
+    const matchesData = response.data.map(match => ({
       ...match,
       matchupType: match.matchupType || '1v1',
       status: match.status || 'ongoing'
     }));
+    // Ensure reactivity by replacing the entire array
+    state.matches.splice(0, state.matches.length, ...matchesData);
   } catch (err) {
     console.error('Failed to fetch matches:', err);
     error.value = 'Failed to load matches';
@@ -229,7 +231,8 @@ const addMatch = async (match) => {
       venue: match.venue
     };
     const response = await axios.post('/api/games', payload);
-    state.matches.unshift(response.data);
+    // Ensure reactivity by replacing the entire array
+    state.matches.splice(0, 0, response.data);
     return response.data;
   } catch (err) {
     console.error('Failed to add match:', err);
@@ -270,7 +273,10 @@ const finalizeMatch = async (id, finalData) => {
 const deleteMatch = async (id) => {
   try {
     await axios.delete(`/api/games/${id}`);
-    state.matches = state.matches.filter(m => m.id !== id);
+    const index = state.matches.findIndex(m => m.id === id);
+    if (index !== -1) {
+      state.matches.splice(index, 1);
+    }
   } catch (err) {
     console.error('Failed to delete match:', err);
     throw new Error(err.response?.data?.error || 'Failed to delete match');
