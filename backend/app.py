@@ -1,6 +1,5 @@
 from flask import Flask
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager
 from config import Config
 from routes import register_routes
 
@@ -10,7 +9,6 @@ def create_app():
 
     # Initialize extensions
     CORS(app, resources={r"/*": {"origins": "*"}})
-    jwt = JWTManager(app)
 
     # Register routes
     register_routes(app)

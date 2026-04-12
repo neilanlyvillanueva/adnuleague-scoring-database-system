@@ -1,6 +1,4 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import create_access_token
-from datetime import timedelta
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -49,15 +47,8 @@ def login():
     if user['role'] != role:
         return jsonify({'error': f'Invalid role. {username} is not registered as {role}'}), 403
 
-    # Create JWT token
-    access_token = create_access_token(
-        identity={'id': username, 'username': username, 'role': user['role']},
-        expires_delta=timedelta(hours=24)
-    )
-
     return jsonify({
         'message': 'Login successful',
-        'access_token': access_token,
         'user': {
             'id': username,
             'username': username,
