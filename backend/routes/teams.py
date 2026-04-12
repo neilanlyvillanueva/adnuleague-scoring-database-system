@@ -27,7 +27,6 @@ def get_team(team_id):
 def create_team():
     """
     Accepts: { name, color? }
-    Note: color is accepted but not stored in schema (generated on frontend)
     """
     data = request.get_json()
     if not data:
@@ -39,7 +38,8 @@ def create_team():
     if Team.query.filter_by(team_name=name).first():
         return jsonify({'error': 'Team name already exists'}), 409
 
-    team = Team(team_name=name)
+    color = data.get('color') or '#0038A8'
+    team = Team(team_name=name, team_color=color)
     db.session.add(team)
     db.session.commit()
     return jsonify(team.to_dict()), 201
