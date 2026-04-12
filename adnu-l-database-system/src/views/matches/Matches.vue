@@ -6,7 +6,7 @@ import { useAuth } from '../../composables/useAuth';
 const { userRole } = useAuth();
 const isAdmin = computed(() => userRole.value === 'admin');
 
-const { state, addMatch, updateMatch, finalizeMatch, deleteMatch, updateTeamWins, getLeaderboard, scoringSystems, fetchEvents, fetchTeams, fetchMatches } = useStore();
+const { state, addMatch, updateMatch, finalizeMatch, deleteMatch, moveMatchToOngoing, updateTeamWins, getLeaderboard, scoringSystems, fetchEvents, fetchTeams, fetchMatches } = useStore();
 
 // Fetch all data on mount
 onMounted(async () => {
@@ -171,7 +171,7 @@ const saveMatch = () => {
     participants: matchForm.participants,
     venue: matchForm.venue,
     scores: matchupType === '1v1' ? { teamA: 0, teamB: 0 } : {},
-    status: 'ongoing'
+    status: 'standby'
   };
 
   if (isEditing.value) {
@@ -479,8 +479,19 @@ const validateCriteriaInput = (event, teamOrParticipant, criteriaName) => {
   }
 };
 
+const standbyMatches = computed(() => state.matches.filter(m => m.status === 'standby'));
 const ongoingMatches = computed(() => state.matches.filter(m => m.status === 'ongoing'));
 const completedMatches = computed(() => state.matches.filter(m => m.status === 'completed'));
+
+const moveMatchToOngoingHandler = async (match) => {
+  if (confirm(`Move "${getEventName(match.eventId)}" to ongoing matches?`)) {
+    try {
+      await moveMatchToOngoing(match.id);
+    } catch (err) {
+      alert('Failed to move match to ongoing: ' + (err.response?.data?.error || err.message));
+    }
+  }
+};
 </script>
 
 <template>
@@ -496,6 +507,65 @@ const completedMatches = computed(() => state.matches.filter(m => m.status === '
         </button>
       </div>
     </header>
+
+    <!-- Standby Matches -->
+    <section class="matches-section">
+      <h2 class="section-title">
+        <i class="fas fa-clock"></i>
+        Standby Matches
+      </h2>
+      <div class="matches-grid">
+        <div v-for="match in standbyMatches" :key="match.id" class="match-card standby">
+          <div class="match-header">
+            <span class="event-badge">{{ getEventName(match.eventId) }}</span>
+            <span class="venue-badge">
+              <i class="fas fa-map-marker-alt"></i> {{ match.venue }}
+            </span>
+          </div>
+
+          <div class="match-content">
+            <div v-if="match.matchupType === '1v1'" class="matchup-1v1">
+              <div class="team-side">
+                <span class="team-name" :style="{ color: getTeamColor(match.teamAId) }">
+                  {{ getTeamName(match.teamAId) }}
+                </span>
+                <span class="team-score">{{ match.scores?.teamA || 0 }}</span>
+              </div>
+              <div class="vs-divider">VS</div>
+              <div class="team-side">
+                <span class="team-name" :style="{ color: getTeamColor(match.teamBId) }">
+                  {{ getTeamName(match.teamBId) }}
+                </span>
+                <span class="team-score">{{ match.scores?.teamB || 0 }}</span>
+              </div>
+            </div>
+
+            <div v-else class="matchup-ffa">
+              <div v-for="participantId in match.participants" :key="participantId" class="ffa-participant">
+                <span class="team-name" :style="{ color: getTeamColor(participantId) }">
+                  {{ getTeamName(participantId) }}
+                </span>
+                <span class="team-score">{{ match.scores?.[participantId] || 0 }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="match-actions">
+            <button class="btn-sm btn-primary" @click="moveMatchToOngoingHandler(match)">
+              <i class="fas fa-play"></i> Move to Ongoing
+            </button>
+            <button v-if="isAdmin" class="btn-sm btn-ghost" @click="deleteMatchHandler(match.id)">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        </div>
+
+        <div v-if="standbyMatches.length === 0" class="no-matches">
+          <i class="fas fa-inbox"></i>
+          <p>No standby matches. Create a new match to get started.</p>
+        </div>
+      </div>
+    </section>
 
     <!-- Ongoing Matches -->
     <section class="matches-section">
@@ -551,7 +621,7 @@ const completedMatches = computed(() => state.matches.filter(m => m.status === '
 
         <div v-if="ongoingMatches.length === 0" class="no-matches">
           <i class="fas fa-calendar-times"></i>
-          <p>No ongoing matches. Create a new match to get started.</p>
+          <p>No ongoing matches.</p>
         </div>
       </div>
     </section>
@@ -920,6 +990,10 @@ const completedMatches = computed(() => state.matches.filter(m => m.status === '
   box-shadow: var(--shadow-sm);
   overflow: hidden;
   border: 1px solid var(--border-color);
+}
+
+.match-card.standby {
+  border-left: 4px solid var(--text-muted);
 }
 
 .match-card.ongoing {

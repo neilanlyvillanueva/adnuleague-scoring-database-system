@@ -1,17 +1,32 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useStore } from '../../composables/useStore';
+import { useAuth } from '../../composables/useAuth';
 
 const { state, getLeaderboard, fetchMatches, fetchLeaderboard } = useStore();
+const { userRole } = useAuth();
+
+const getUserNameKey = () => {
+  const role = userRole.value || 'admin';
+  return `adnl_user_name_${role}`;
+};
 
 const dynamicData = reactive({
   userName: 'Admin User'
 });
 
+// Load the username for current role on mount
+const loadUserName = () => {
+  const role = userRole.value || 'admin';
+  const defaultName = role === 'tabulation' ? 'Tabulation User' : 'Admin User';
+  dynamicData.userName = localStorage.getItem(`adnl_user_name_${role}`) || defaultName;
+};
+
 const currentDate = ref(new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }));
 
 // Fetch data on mount
 onMounted(async () => {
+  loadUserName();
   await Promise.all([fetchMatches(), fetchLeaderboard()]);
 });
 
@@ -31,6 +46,10 @@ const closeModal = () => isModalOpen.value = false;
 const saveEdit = () => {
   if (tempEditValue.value.trim() !== '') {
     dynamicData[currentEditingKey.value] = tempEditValue.value;
+    if (currentEditingKey.value === 'userName') {
+      const role = userRole.value || 'admin';
+      localStorage.setItem(`adnl_user_name_${role}`, tempEditValue.value);
+    }
   }
   closeModal();
 };

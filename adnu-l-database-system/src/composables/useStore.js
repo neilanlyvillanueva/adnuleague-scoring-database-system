@@ -348,6 +348,40 @@ const deleteMatch = async (id) => {
   }
 };
 
+const moveMatchToOngoing = async (id) => {
+  try {
+    const response = await axios.post(`/api/games/${id}/move-to-ongoing`);
+    const index = state.matches.findIndex(m => m.id === id);
+    if (index !== -1) {
+      const updatedMatch = {
+        ...response.data,
+        eventId: response.data.eventId || response.data.sportId,
+        matchupType: response.data.matchupType || '1v1',
+        status: (response.data.status || 'ongoing').toLowerCase(),
+        participants: response.data.participants || [],
+        teamAId: response.data.teamAId || response.data.participants?.[0],
+        teamBId: response.data.teamBId || response.data.participants?.[1],
+        scores: (() => {
+          const scores = response.data.scores || {};
+          if (response.data.matchupType === '1v1') {
+            const teamIds = response.data.participants || Object.keys(scores).map(Number);
+            return {
+              teamA: scores[teamIds[0]] ?? scores[teamIds[0]?.toString()] ?? 0,
+              teamB: scores[teamIds[1]] ?? scores[teamIds[1]?.toString()] ?? 0
+            };
+          }
+          return scores;
+        })()
+      };
+      state.matches[index] = updatedMatch;
+    }
+    return response.data;
+  } catch (err) {
+    console.error('Failed to move match to ongoing:', err);
+    throw new Error(err.response?.data?.error || 'Failed to move match to ongoing');
+  }
+};
+
 // Helper functions
 const getEvent = (id) => state.events.find(e => e.id === id);
 const getTeam = (id) => state.teams.find(t => t.id === id);
@@ -416,6 +450,7 @@ export function useStore() {
     updateMatch,
     finalizeMatch,
     deleteMatch,
+    moveMatchToOngoing,
     getMatch,
     // Leaderboard operations
     updateTeamWins,

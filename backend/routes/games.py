@@ -73,7 +73,7 @@ def create_game():
         venue       = venue,
         school_year = data.get('schoolYear', '2024-2025'),
         season      = data.get('season', 'Intramurals'),
-        game_status = 'Ongoing'
+        game_status = 'Standby'
     )
     db.session.add(game)
     db.session.flush()
@@ -99,6 +99,19 @@ def delete_game(game_id):
     db.session.delete(game)
     db.session.commit()
     return jsonify({'message': f'Game {game_id} deleted'}), 200
+
+
+# ─── POST move game to ongoing ───────────────────────────
+@games_bp.route('/<int:game_id>/move-to-ongoing', methods=['POST'])
+def move_to_ongoing(game_id):
+    """Move a match from standby to ongoing status."""
+    game = Game.query.get_or_404(game_id)
+    if game.game_status != 'Standby':
+        return jsonify({'error': 'Only standby games can be moved to ongoing'}), 400
+    game.game_status = 'Ongoing'
+    db.session.commit()
+    db.session.refresh(game)
+    return jsonify(game.to_dict()), 200
 
 
 # ─── POST finalize game ──────────────────────────────────
