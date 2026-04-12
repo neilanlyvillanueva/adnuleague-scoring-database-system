@@ -11,9 +11,8 @@ class Sport(db.Model):
 
     sport_id = Column(Integer, primary_key=True)
     sport_name = Column(String(100), nullable=False)
-    sport_category = Column(String(100), default='Sports')
-    scoring_system_id = Column(Integer, nullable=False)
-    matchup_type = Column(String(20), nullable=False)  # '1v1' or 'free-for-all'
+    scoring_type = Column(String(50), nullable=False)  # A-H scoring types
+    matchup_type = Column(String(10), nullable=False)  # '1v1' or 'FFA'
     is_lower_better = Column(Boolean, default=False)
     total_sets_required = Column(Integer, default=1)
 
@@ -22,11 +21,22 @@ class Sport(db.Model):
     games = db.relationship('Game', backref='sport', cascade='all, delete-orphan', lazy=True)
 
     def to_dict(self):
+        # Map scoring_type (A-H) to frontend scoringSystemId (1-8)
+        scoring_type_map = {
+            'A': 1,  # Timed Incremental (1v1)
+            'B': 2,  # Ranked Incremental (1v1)
+            'C': 3,  # Ranked Incremental (FFA)
+            'D': 4,  # Threshold Incremental (1v1)
+            'E': 5,  # Ranked Timed (FFA)
+            'F': 6,  # Criteria Based (FFA)
+            'G': 7,  # Judge Based (FFA)
+            'H': 8   # Win/Lose (FFA)
+        }
         return {
             'id': self.sport_id,
             'name': self.sport_name,
-            'category': self.sport_category,
-            'scoringSystemId': self.scoring_system_id,
+            'scoringType': self.scoring_type,
+            'scoringSystemId': scoring_type_map.get(self.scoring_type, 1),
             'matchupSystem': self.matchup_type,
             'sets': self.total_sets_required if self.total_sets_required else None,
             'criteria': [{'name': c.criteria_name, 'points': c.max_points} for c in self.criteria]
@@ -58,7 +68,7 @@ class Team(db.Model):
         return {
             'id': self.team_id,
             'name': self.team_name,
-            'color': self.team_color,
+            'color': self.team_color or '#0038A8',
             'participatingSports': [p.sport_id for p in self.participations]
         }
 
@@ -103,6 +113,14 @@ class Game(db.Model):
     results = db.relationship('GameResult', backref='game', cascade='all, delete-orphan', lazy=True)
 
     def to_dict(self):
+        # Build matchup data from results
+        results_data = []
+        for r in self.results:
+            results_data.append({
+                'teamId': r.team_id,
+                'finalScore': float(r.final_score) if r.final_score else 0,
+                'isWinner': r.is_winner
+            })
         return {
             'id': self.game_id,
             'sportId': self.sport_id,
@@ -110,14 +128,7 @@ class Game(db.Model):
             'schoolYear': self.school_year,
             'season': self.season,
             'status': self.game_status,
-            'results': [
-                {
-                    'teamId': r.team_id,
-                    'finalScore': float(r.final_score) if r.final_score else 0,
-                    'isWinner': r.is_winner
-                }
-                for r in self.results
-            ]
+            'results': results_data
         }
 
 

@@ -4,9 +4,18 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
+    # Support both DATABASE_URI (single string) and individual DATABASE_TYPE + credentials
+    DATABASE_URI = os.getenv('DATABASE_URI')
     DATABASE_TYPE = os.getenv('DATABASE_TYPE', 'sqlite')
 
-    if DATABASE_TYPE == 'postgresql':
+    if DATABASE_URI:
+        # Use the full URI if provided (e.g., from .env.example format)
+        SQLALCHEMY_DATABASE_URI = DATABASE_URI
+        SQLALCHEMY_ENGINE_OPTIONS = {
+            "pool_pre_ping": True,
+            "pool_recycle": 300,
+        }
+    elif DATABASE_TYPE == 'postgresql':
         DB_USER = os.getenv('DB_USER')
         DB_PASSWORD = os.getenv('DB_PASSWORD')
         DB_HOST = os.getenv('DB_HOST')

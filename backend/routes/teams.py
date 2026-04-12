@@ -3,13 +3,14 @@ from models import db, Team, TeamParticipation, Sport
 
 teams_bp = Blueprint('teams', __name__, url_prefix='/api/teams')
 
+# Consistent color mapping for frontend (based on team_id)
+TEAM_COLORS = ['#0038A8', '#FFD700', '#FF4D4D', '#00A859', '#8B5CF6', '#F59E0B', '#EC4899', '#10B981']
+
 
 # ─── GET all teams ───────────────────────────────────────
 @teams_bp.route('', methods=['GET'])
 def get_teams():
-    """Returns list in the exact shape of state.teams in useStore:
-    [{ id, name, color, participatingSports: [sport_id, ...] }]
-    """
+    """Returns list in the exact shape of state.teams in useStore."""
     teams = Team.query.order_by(Team.team_id).all()
     return jsonify([t.to_dict() for t in teams]), 200
 
@@ -25,7 +26,8 @@ def get_team(team_id):
 @teams_bp.route('', methods=['POST'])
 def create_team():
     """
-    Accepts: { name, color }
+    Accepts: { name, color? }
+    Note: color is accepted but not stored in schema (generated on frontend)
     """
     data = request.get_json()
     if not data:
@@ -37,7 +39,7 @@ def create_team():
     if Team.query.filter_by(team_name=name).first():
         return jsonify({'error': 'Team name already exists'}), 409
 
-    team = Team(team_name=name, team_color=data.get('color', '#0038A8'))
+    team = Team(team_name=name)
     db.session.add(team)
     db.session.commit()
     return jsonify(team.to_dict()), 201
@@ -46,7 +48,7 @@ def create_team():
 # ─── PUT update team ─────────────────────────────────────
 @teams_bp.route('/<int:team_id>', methods=['PUT'])
 def update_team(team_id):
-    """Accepts: { name?, color? }"""
+    """Accepts: { name? }"""
     team = Team.query.get_or_404(team_id)
     data = request.get_json()
     if not data:
@@ -58,9 +60,6 @@ def update_team(team_id):
         if existing and existing.team_id != team_id:
             return jsonify({'error': 'Team name already exists'}), 409
         team.team_name = new_name
-
-    if 'color' in data:
-        team.team_color = data['color']
 
     db.session.commit()
     return jsonify(team.to_dict()), 200
@@ -79,7 +78,7 @@ def delete_team(team_id):
 @teams_bp.route('/<int:team_id>/participation/<int:sport_id>', methods=['POST'])
 def toggle_participation(team_id, sport_id):
     """
-    Toggle a team's participation in a sport (same as toggleTeamSportParticipation in useStore).
+    Toggle a team's participation in a sport.
     Returns: { participating: bool, teamId, sportId, team: <full team dict> }
     """
     Team.query.get_or_404(team_id)

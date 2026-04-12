@@ -3,6 +3,20 @@ from models import db, Sport, SportCriteria
 
 sports_bp = Blueprint('sports', __name__, url_prefix='/api/sports')
 
+# Mapping between frontend scoringSystemId (1-8) and backend scoring_type (A-H)
+SCORING_TYPE_MAP = {
+    1: 'A',  # Timed Incremental (1v1)
+    2: 'B',  # Ranked Incremental (1v1)
+    3: 'C',  # Ranked Incremental (FFA)
+    4: 'D',  # Threshold Incremental (1v1)
+    5: 'E',  # Ranked Timed (FFA)
+    6: 'F',  # Criteria Based (FFA)
+    7: 'G',  # Judge Based (FFA)
+    8: 'H'   # Win/Lose (FFA)
+}
+
+REVERSE_SCORING_TYPE_MAP = {v: k for k, v in SCORING_TYPE_MAP.items()}
+
 
 # ─── GET all sports ──────────────────────────────────────
 @sports_bp.route('', methods=['GET'])
@@ -25,7 +39,7 @@ def create_sport():
     """
     Accepts frontend useStore event shape:
     {
-      name, category, scoringSystemId, matchupSystem ('1v1'|'free-for-all'),
+      name, scoringSystemId (1-8), matchupSystem ('1v1'|'FFA'),
       sets (int|null), criteria [{ name, points }]
     }
     """
@@ -34,7 +48,6 @@ def create_sport():
         return jsonify({'error': 'No data provided'}), 400
 
     name = (data.get('name') or '').strip()
-    category = data.get('category', 'Sports')
     scoring_system_id = data.get('scoringSystemId')
     matchup = data.get('matchupSystem', '1v1')
     sets = data.get('sets')
@@ -44,13 +57,19 @@ def create_sport():
         return jsonify({'error': 'name is required'}), 400
     if not scoring_system_id:
         return jsonify({'error': 'scoringSystemId is required'}), 400
-    if matchup not in ('1v1', 'free-for-all'):
-        return jsonify({'error': 'matchupSystem must be "1v1" or "free-for-all"'}), 400
+
+    # Convert frontend scoringSystemId (1-8) to backend scoring_type (A-H)
+    scoring_type = SCORING_TYPE_MAP.get(int(scoring_system_id))
+    if not scoring_type:
+        return jsonify({'error': 'Invalid scoringSystemId. Must be 1-8'}), 400
+
+    # Normalize matchup type
+    if matchup == 'free-for-all':
+        matchup = 'FFA'
 
     sport = Sport(
         sport_name=name,
-        sport_category=category,
-        scoring_system_id=int(scoring_system_id),
+        scoring_type=scoring_type,
         matchup_type=matchup,
         is_lower_better=data.get('isLowerBetter', False),
         total_sets_required=int(sets) if sets else 1
@@ -80,12 +99,13 @@ def update_sport(sport_id):
 
     if 'name' in data:
         sport.sport_name = data['name'].strip()
-    if 'category' in data:
-        sport.sport_category = data['category']
     if 'scoringSystemId' in data:
-        sport.scoring_system_id = int(data['scoringSystemId'])
+        scoring_type = SCORING_TYPE_MAP.get(int(data['scoringSystemId']))
+        if scoring_type:
+            sport.scoring_type = scoring_type
     if 'matchupSystem' in data:
-        sport.matchup_type = data['matchupSystem']
+        matchup = data['matchupSystem']
+        sport.matchup_type = 'FFA' if matchup == 'free-for-all' else matchup
     if 'isLowerBetter' in data:
         sport.is_lower_better = data['isLowerBetter']
     if 'sets' in data:

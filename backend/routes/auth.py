@@ -1,18 +1,7 @@
 from flask import Blueprint, request, jsonify
+from models import db, User
 
 auth_bp = Blueprint('auth', __name__)
-
-# Default credentials - change these as needed
-DEFAULT_USERS = {
-    'admin': {
-        'password': 'admin123',
-        'role': 'admin'
-    },
-    'tabulation': {
-        'password': 'tabulation123',
-        'role': 'tabulation'
-    }
-}
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
@@ -32,33 +21,37 @@ def login():
         return jsonify({'error': 'Password is required'}), 400
     if not role:
         return jsonify({'error': 'Role is required'}), 400
-    if role not in ['admin', 'tabulation']:
+    if role not in ['admin', 'tabulation', 'scorer']:
         return jsonify({'error': 'Invalid role. Must be "admin" or "tabulation"'}), 400
 
-    # Check credentials against default users
-    if username not in DEFAULT_USERS:
+    # Find user in database
+    user = User.query.filter_by(username=username).first()
+    if not user:
         return jsonify({'error': 'Invalid credentials'}), 401
 
-    user = DEFAULT_USERS[username]
-
-    if user['password'] != password:
+    # Check password
+    if not user.check_password(password):
         return jsonify({'error': 'Invalid credentials'}), 401
 
-    if user['role'] != role:
+    # Normalize role for comparison (tabulation == scorer)
+    user_role = user.role
+    requested_role = 'scorer' if role == 'tabulation' else role
+
+    if user_role != requested_role:
         return jsonify({'error': f'Invalid role. {username} is not registered as {role}'}), 403
 
     return jsonify({
         'message': 'Login successful',
         'user': {
-            'id': username,
-            'username': username,
-            'role': user['role']
+            'id': user.user_id,
+            'username': user.username,
+            'role': user.role
         }
     }), 200
 
 @auth_bp.route('/register', methods=['POST'])
 def register():
-    # Registration disabled - credentials are pre-configured
+    # Registration disabled - contact administrator
     return jsonify({'error': 'Registration disabled. Contact administrator for credentials.'}), 403
 
 @auth_bp.route('/logout', methods=['POST'])

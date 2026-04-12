@@ -51,6 +51,10 @@ def create_game():
 
     Sport.query.get_or_404(event_id)
 
+    # Normalize matchup type
+    if matchup == 'free-for-all':
+        matchup = 'FFA'
+
     if matchup == '1v1':
         if not team_a_id or not team_b_id:
             return jsonify({'error': 'teamAId and teamBId are required for 1v1'}), 400
@@ -67,7 +71,7 @@ def create_game():
         venue       = venue,
         school_year = data.get('schoolYear', '2024-2025'),
         season      = data.get('season', 'Intramurals'),
-        game_status = 'ongoing'
+        game_status = 'Ongoing'
     )
     db.session.add(game)
     db.session.flush()
@@ -102,8 +106,8 @@ def finalize_game(game_id):
     Accepts the same data that finalizeMatch() writes in useStore:
     {
       scores:    { teamA: num, teamB: num }    -- for 1v1
-                 { <teamId>: num, ... }        -- for FFA (key is team_id as string or int)
-      setScores: [{ set: 1, teamA: num, teamB: num }, ...]  -- optional, for scoringSystemId=4
+                 { <teamId>: num, ... }        -- for FFA
+      setScores: [{ set: 1, teamA: num, teamB: num }, ...]  -- optional
       winner:    <teamId> | null,
       status:    'completed'
     }
@@ -128,7 +132,7 @@ def finalize_game(game_id):
         team_a_result.is_winner = (team_a_result.team_id == winner_id)
         team_b_result.is_winner = (team_b_result.team_id == winner_id)
 
-        # Persist set scores as score_breakdown rows (component_name = 'set_N')
+        # Persist set scores as score_breakdown rows
         ScoreBreakdown.query.filter_by(result_id=team_a_result.result_id).delete()
         ScoreBreakdown.query.filter_by(result_id=team_b_result.result_id).delete()
         for s in set_scores:
@@ -153,7 +157,7 @@ def finalize_game(game_id):
                 result.final_score = scores[result.team_id]
             result.is_winner = (result.team_id == winner_id)
 
-    game.game_status = 'completed'
+    game.game_status = 'Completed'
     db.session.commit()
     db.session.refresh(game)
     return jsonify(game.to_dict()), 200
