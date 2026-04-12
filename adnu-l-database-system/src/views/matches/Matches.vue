@@ -154,10 +154,21 @@ const submitFinalScores = () => {
 
   const match = selectedMatch.value;
   const event = state.events.find(e => e.id === match.eventId);
+  const scoringSystem = state.scoringSystems.find(s => s.id === event?.scoringSystemId);
   let winner = null;
 
-  if (event?.thresholdIncremental && finalizeForm.setScores.length > 0) {
-    // Count set wins for 1v1
+  // Scoring System IDs:
+  // 1: Timed Incremental (1v1) - highest score wins
+  // 2: Ranked Incremental (1v1) - highest score wins
+  // 3: Ranked Incremental (FFA) - highest score wins
+  // 4: Threshold Incremental (1v1) - most set wins
+  // 5: Ranked Time (FFA) - lowest time wins
+  // 6: Criteria Based (FFA) - highest criteria score wins
+  // 7: Judge Based (FFA) - highest judge score wins
+  // 8: Win/Lose (FFA) - binary win (1 or 0)
+
+  // Threshold Incremental (Set-based) - ID 4
+  if (scoringSystem?.id === 4 && finalizeForm.setScores.length > 0) {
     if (match.matchupType === '1v1') {
       let teamAWins = 0;
       let teamBWins = 0;
@@ -179,99 +190,75 @@ const submitFinalScores = () => {
       if (winner) {
         updateTeamWins(winner, 1);
       }
-    } else {
-      // Free-for-all with sets - find participant with highest total
-      const totals = {};
-      match.participants?.forEach(p => {
-        totals[p] = 0;
-        finalizeForm.setScores.forEach(set => {
-          // Find who won this set
-          let maxScore = -1;
-          let setWinner = null;
-          match.participants?.forEach(part => {
-            if (set[part] > maxScore) {
-              maxScore = set[part];
-              setWinner = part;
-            }
-          });
-          if (setWinner) {
-            totals[setWinner] = (totals[setWinner] || 0) + 1;
-          }
-        });
-      });
-
-      // Find overall winner
-      let maxWins = -1;
-      match.participants?.forEach(p => {
-        if (totals[p] > maxWins) {
-          maxWins = totals[p];
-          winner = p;
-        }
-      });
-
-      const finalScores = {};
-      match.participants?.forEach(p => {
-        finalScores[p] = finalizeForm.setScores.reduce((sum, set) => sum + (set[p] || 0), 0);
-      });
-
-      finalizeMatch(match.id, {
-        scores: finalScores,
-        setScores: finalizeForm.setScores,
-        status: 'completed',
-        winner
-      });
-
-      if (winner) {
-        updateTeamWins(winner, 1);
-      }
     }
-  } else {
-    // Non-set based scoring
-    if (match.matchupType === '1v1') {
-      const scoreA = parseInt(finalizeForm.scores.teamA) || 0;
-      const scoreB = parseInt(finalizeForm.scores.teamB) || 0;
+    return;
+  }
 
-      const event = state.events.find(e => e.id === match.eventId);
-      const isTimeRanked = event?.scoringSystemId === 3; // Timed (Race)
+  // Handle 1v1 matches (Timed Incremental ID 1, Ranked Incremental ID 2)
+  if (match.matchupType === '1v1') {
+    const scoreA = parseInt(finalizeForm.scores.teamA) || 0;
+    const scoreB = parseInt(finalizeForm.scores.teamB) || 0;
 
-      if (isTimeRanked) {
-        // Lowest time wins
-        winner = scoreA < scoreB ? match.teamAId : match.teamBId;
-      } else {
-        // Highest score wins
-        winner = scoreA > scoreB ? match.teamAId : match.teamBId;
-      }
+    // Ranked Time (FFA) ID 5 - lowest time/score wins
+    // Note: For 1v1 Timed Incremental, highest score wins (like basketball)
+    winner = scoreA > scoreB ? match.teamAId : match.teamBId;
 
-      finalizeMatch(match.id, {
-        scores: { teamA: scoreA, teamB: scoreB },
-        status: 'completed',
-        winner
-      });
+    finalizeMatch(match.id, {
+      scores: { teamA: scoreA, teamB: scoreB },
+      status: 'completed',
+      winner
+    });
 
-      if (winner) {
-        updateTeamWins(winner, 1);
-      }
-    } else {
-      // Free-for-all - find highest score
-      let maxScore = -1;
-      match.participants?.forEach(p => {
-        const score = parseInt(finalizeForm.scores[p]) || 0;
-        if (score > maxScore) {
-          maxScore = score;
-          winner = p;
-        }
-      });
-
-      finalizeMatch(match.id, {
-        scores: finalizeForm.scores,
-        status: 'completed',
-        winner
-      });
-
-      if (winner) {
-        updateTeamWins(winner, 1);
-      }
+    if (winner) {
+      updateTeamWins(winner, 1);
     }
+    return;
+  }
+
+  // Handle FFA matches
+  // Ranked Time (FFA) ID 5 - lowest time wins
+  if (scoringSystem?.id === 5) {
+    let minTime = Infinity;
+    match.participants?.forEach(p => {
+      const time = parseInt(finalizeForm.scores[p]) || 0;
+      if (time < minTime) {
+        minTime = time;
+        winner = p;
+      }
+    });
+
+    finalizeMatch(match.id, {
+      scores: finalizeForm.scores,
+      status: 'completed',
+      winner
+    });
+
+    if (winner) {
+      updateTeamWins(winner, 1);
+    }
+    return;
+  }
+
+  // Criteria Based (FFA) ID 6, Judge Based (FFA) ID 7, Win/Lose (FFA) ID 8
+  // Ranked Incremental (FFA) ID 3 - highest score wins
+  // For all these, highest score/time/value wins
+  let maxScore = -1;
+  match.participants?.forEach(p => {
+    const score = parseInt(finalizeForm.scores[p]) || 0;
+    if (score > maxScore) {
+      maxScore = score;
+      winner = p;
+    }
+  });
+
+  finalizeMatch(match.id, {
+    scores: finalizeForm.scores,
+    status: 'completed',
+    winner
+  });
+
+  if (winner) {
+    updateTeamWins(winner, 1);
   }
 
   closeModal();
@@ -532,7 +519,7 @@ const completedMatches = computed(() => state.matches.filter(m => m.status === '
         </div>
 
         <div class="modal-form-body">
-          <div v-if="state.events.find(e => e.id === selectedMatch.eventId)?.thresholdIncremental"
+          <div v-if="selectedMatch && state.events.find(e => e.id === selectedMatch.eventId)?.scoringSystemId === 4"
                class="set-scores-section">
             <h4>Set Scores</h4>
 

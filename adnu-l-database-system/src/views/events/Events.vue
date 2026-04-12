@@ -8,22 +8,21 @@ const isAdmin = computed(() => userRole.value === 'admin');
 
 const { state, addEvent, updateEvent, deleteEvent, addScoringSystem } = useStore();
 
-const categories = ['All', 'Sports', 'Cultural', 'Academic', 'Laro ng Lahi'];
 const activeFilter = ref('All');
 
 const showModal = ref(false);
 const showScoringModal = ref(false);
+const showCriteriaModal = ref(false);
 const isEditing = ref(false);
 const editIndex = ref(null);
 
 const form = reactive({
   name: '',
   category: 'Sports',
-  customCategory: '',
   scoringSystemId: null,
-  thresholdIncremental: false,
+  matchupSystem: '1v1',
   sets: null,
-  matchupSystem: '1v1'
+  criteria: []
 });
 
 const scoringForm = reactive({
@@ -32,9 +31,23 @@ const scoringForm = reactive({
   type: 'predefined'
 });
 
+const criteriaForm = reactive({
+  criteriaList: [],
+  newCriteriaName: '',
+  newCriteriaPoints: null
+});
+
 const filteredEvents = computed(() => {
   if (activeFilter.value === 'All') return state.events;
   return state.events.filter(e => e.category === activeFilter.value);
+});
+
+const selectedScoringSystem = computed(() => {
+  return state.scoringSystems.find(s => s.id === form.scoringSystemId);
+});
+
+const criteriaTotal = computed(() => {
+  return form.criteria.reduce((sum, c) => sum + c.points, 0);
 });
 
 const openEventModal = (event = null) => {
@@ -43,20 +56,18 @@ const openEventModal = (event = null) => {
     editIndex.value = event.id;
     form.name = event.name;
     form.category = event.category;
-    form.customCategory = '';
     form.scoringSystemId = event.scoringSystemId;
-    form.thresholdIncremental = event.thresholdIncremental;
-    form.sets = event.sets;
-    form.matchupSystem = event.matchupSystem;
+    form.matchupSystem = event.matchupSystem || '1v1';
+    form.sets = event.sets || null;
+    form.criteria = event.criteria ? JSON.parse(JSON.stringify(event.criteria)) : [];
   } else {
     isEditing.value = false;
     form.name = '';
     form.category = 'Sports';
-    form.customCategory = '';
     form.scoringSystemId = null;
-    form.thresholdIncremental = false;
-    form.sets = null;
     form.matchupSystem = '1v1';
+    form.sets = null;
+    form.criteria = [];
   }
   showModal.value = true;
 };
@@ -68,9 +79,54 @@ const openScoringModal = () => {
   showScoringModal.value = true;
 };
 
+const openCriteriaModal = () => {
+  criteriaForm.criteriaList = form.criteria.length > 0
+    ? form.criteria.map(c => ({ ...c }))
+    : [];
+  criteriaForm.newCriteriaName = '';
+  criteriaForm.newCriteriaPoints = null;
+  showCriteriaModal.value = true;
+};
+
 const closeModal = () => {
   showModal.value = false;
   showScoringModal.value = false;
+  showCriteriaModal.value = false;
+};
+
+const addCriteria = () => {
+  if (!criteriaForm.newCriteriaName.trim()) {
+    alert('Please enter a criteria name');
+    return;
+  }
+  if (!criteriaForm.newCriteriaPoints || criteriaForm.newCriteriaPoints <= 0) {
+    alert('Please enter a valid point value (greater than 0)');
+    return;
+  }
+  criteriaForm.criteriaList.push({
+    name: criteriaForm.newCriteriaName,
+    points: criteriaForm.newCriteriaPoints
+  });
+  criteriaForm.newCriteriaName = '';
+  criteriaForm.newCriteriaPoints = null;
+};
+
+const removeCriteria = (index) => {
+  criteriaForm.criteriaList.splice(index, 1);
+};
+
+const saveCriteria = () => {
+  const total = criteriaForm.criteriaList.reduce((sum, c) => sum + c.points, 0);
+  if (total !== 100) {
+    alert(`Total criteria points must equal 100. Current total: ${total}`);
+    return;
+  }
+  if (criteriaForm.criteriaList.length === 0) {
+    alert('Please add at least one criteria');
+    return;
+  }
+  form.criteria = criteriaForm.criteriaList.map(c => ({ ...c }));
+  showCriteriaModal.value = false;
 };
 
 const saveEvent = () => {
@@ -83,14 +139,36 @@ const saveEvent = () => {
     return;
   }
 
-  const finalCategory = form.category === 'Custom' ? form.customCategory : form.category;
+  const selectedSystem = state.scoringSystems.find(s => s.id === form.scoringSystemId);
+
+  // Validate sets for Threshold Incremental
+  if (selectedSystem?.requiresSets) {
+    if (!form.sets || form.sets < 1) {
+      alert('Please enter a valid number of sets');
+      return;
+    }
+  }
+
+  // Validate criteria for Criteria Based and Judge Based
+  if (selectedSystem?.requiresCriteria) {
+    if (form.criteria.length === 0) {
+      alert('Please add criteria/rubrics for this scoring system');
+      return;
+    }
+    const total = form.criteria.reduce((sum, c) => sum + c.points, 0);
+    if (total !== 100) {
+      alert(`Total criteria points must equal 100. Current total: ${total}`);
+      return;
+    }
+  }
+
   const eventData = {
     name: form.name,
-    category: finalCategory,
+    category: form.category,
     scoringSystemId: form.scoringSystemId,
-    thresholdIncremental: form.thresholdIncremental,
-    sets: form.thresholdIncremental ? form.sets : null,
-    matchupSystem: form.matchupSystem
+    matchupSystem: form.matchupSystem,
+    sets: selectedSystem?.requiresSets ? form.sets : null,
+    criteria: selectedSystem?.requiresCriteria ? form.criteria : []
   };
 
   if (isEditing.value) {
@@ -106,6 +184,20 @@ const deleteEventHandler = (id) => {
   if (confirm("Delete this event?")) {
     deleteEvent(id);
   }
+};
+
+const getCategoryClass = (category) => {
+  const classMap = {
+    'Sports': 'sports',
+    'Special Events': 'special-events',
+    'Esports': 'esports',
+    'Board Games': 'board-games',
+    'Laro ng Lahi': 'laro-ng-lahi',
+    'LitMusDa': 'litmusda',
+    'Outside Events': 'outside-events',
+    'Indoor Games': 'indoor-games'
+  };
+  return classMap[category] || 'default';
 };
 
 const saveScoringSystem = () => {
@@ -140,7 +232,13 @@ const saveScoringSystem = () => {
 
     <div class="filter-bar">
       <button
-        v-for="cat in categories"
+        :class="['filter-btn', { active: activeFilter === 'All' }]"
+        @click="activeFilter = 'All'"
+      >
+        All
+      </button>
+      <button
+        v-for="cat in state.eventCategories"
         :key="cat"
         :class="['filter-btn', { active: activeFilter === cat }]"
         @click="activeFilter = cat"
@@ -151,7 +249,7 @@ const saveScoringSystem = () => {
 
     <div class="events-grid">
       <div v-for="event in filteredEvents" :key="event.id" class="event-card">
-        <div class="event-type-tag" :class="event.category.toLowerCase().replace(/\s+/g, '-')">
+        <div class="event-type-tag" :class="getCategoryClass(event.category)">
           {{ event.category }}
         </div>
         <div class="event-card-content">
@@ -166,9 +264,13 @@ const saveScoringSystem = () => {
                 <i class="fas fa-users"></i>
                 {{ event.matchupSystem === '1v1' ? 'Head-to-Head' : 'Free-for-All' }}
               </span>
-              <span v-if="event.thresholdIncremental" class="detail-badge">
+              <span v-if="event.sets" class="detail-badge">
                 <i class="fas fa-layer-group"></i>
                 {{ event.sets }} Sets
+              </span>
+              <span v-if="event.criteria && event.criteria.length > 0" class="detail-badge">
+                <i class="fas fa-list-check"></i>
+                {{ event.criteria.length }} Criteria
               </span>
             </div>
           </div>
@@ -196,18 +298,11 @@ const saveScoringSystem = () => {
             <input v-model="form.name" type="text" class="modal-input" placeholder="e.g. Men's Basketball">
           </div>
 
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <label>Category</label>
-              <select v-model="form.category" class="modal-input">
-                <option v-for="cat in categories.slice(1)" :key="cat" :value="cat">{{ cat }}</option>
-                <option value="Custom">Other (User Defined)</option>
-              </select>
-            </div>
-            <div class="form-group flex-1" v-if="form.category === 'Custom'">
-              <label>Specify Custom Category</label>
-              <input v-model="form.customCategory" type="text" class="modal-input" placeholder="Enter type...">
-            </div>
+          <div class="form-group">
+            <label>Category</label>
+            <select v-model="form.category" class="modal-input">
+              <option v-for="cat in state.eventCategories" :key="cat" :value="cat">{{ cat }}</option>
+            </select>
           </div>
 
           <div class="form-group">
@@ -245,20 +340,30 @@ const saveScoringSystem = () => {
             </div>
           </div>
 
-          <div class="form-group">
-            <div class="checkbox-label">
-              <label class="checkbox-container">
-                <input type="checkbox" v-model="form.thresholdIncremental">
-                <span class="checkmark"></span>
-                <span class="checkbox-text">Threshold Incremental (Set-based)</span>
-              </label>
-            </div>
-          </div>
-
-          <div v-if="form.thresholdIncremental" class="form-group">
+          <!-- Sets configuration for Threshold Incremental -->
+          <div v-if="selectedScoringSystem?.requiresSets" class="form-group">
             <label>Number of Sets</label>
             <input v-model.number="form.sets" type="number" class="modal-input" placeholder="e.g. 3" min="1">
             <small class="form-hint">Total sets to be played (e.g., 3 means best of 3)</small>
+          </div>
+
+          <!-- Criteria configuration for Criteria Based and Judge Based -->
+          <div v-if="selectedScoringSystem?.requiresCriteria" class="form-group">
+            <label>Criteria / Rubrics</label>
+            <div class="criteria-config">
+              <div v-if="form.criteria.length > 0" class="criteria-list">
+                <div v-for="(criteria, idx) in form.criteria" :key="idx" class="criteria-item">
+                  <span class="criteria-name">{{ criteria.name }}</span>
+                  <span class="criteria-points">{{ criteria.points }} pts</span>
+                </div>
+                <div class="criteria-total" :class="{ 'invalid': criteriaTotal !== 100 }">
+                  Total: {{ criteriaTotal }} / 100
+                </div>
+              </div>
+              <button type="button" class="btn-manage-criteria" @click="openCriteriaModal">
+                <i class="fas fa-cog"></i> {{ form.criteria.length > 0 ? 'Manage Criteria' : 'Add Criteria' }}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -302,6 +407,61 @@ const saveScoringSystem = () => {
         <div class="modal-actions">
           <button class="btn-ghost" @click="showScoringModal = false">Close</button>
           <button class="btn-primary" @click="saveScoringSystem">Add Custom System</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Criteria Modal -->
+    <div v-if="showCriteriaModal" class="modal-overlay" @click.self="showCriteriaModal = false">
+      <div class="modal-content criteria-modal">
+        <div class="modal-header-section">
+          <h3>Manage Criteria / Rubrics</h3>
+          <p class="modal-subtitle">Add criteria with point values. Total must equal exactly 100 points.</p>
+        </div>
+
+        <div class="modal-form-body">
+          <div class="criteria-input-section">
+            <div class="form-row criteria-input-row">
+              <div class="form-group flex-2">
+                <label>Criteria Name</label>
+                <input v-model="criteriaForm.newCriteriaName" type="text" class="modal-input" placeholder="e.g. Stage Presence">
+              </div>
+              <div class="form-group flex-1">
+                <label>Points</label>
+                <input v-model.number="criteriaForm.newCriteriaPoints" type="number" class="modal-input" placeholder="0" min="1">
+              </div>
+            </div>
+            <button type="button" class="btn-add-criteria" @click="addCriteria">
+              <i class="fas fa-plus"></i> Add Criteria
+            </button>
+          </div>
+
+          <div class="criteria-list-section">
+            <h4>Added Criteria</h4>
+            <div v-if="criteriaForm.criteriaList.length === 0" class="no-criteria">
+              <i class="fas fa-list-ul"></i>
+              <p>No criteria added yet. Add criteria above.</p>
+            </div>
+            <div v-else class="criteria-list">
+              <div v-for="(criteria, idx) in criteriaForm.criteriaList" :key="idx" class="criteria-item">
+                <span class="criteria-name">{{ criteria.name }}</span>
+                <span class="criteria-points">{{ criteria.points }} pts</span>
+                <button type="button" class="btn-remove-criteria" @click="removeCriteria(idx)">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+            </div>
+            <div class="criteria-total-display" :class="{ 'invalid': criteriaForm.criteriaList.reduce((sum, c) => sum + c.points, 0) !== 100 }">
+              <strong>Total:</strong> {{ criteriaForm.criteriaList.reduce((sum, c) => sum + c.points, 0) }} / 100
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button class="btn-ghost" @click="showCriteriaModal = false">Cancel</button>
+          <button class="btn-primary" @click="saveCriteria">
+            <i class="fas fa-check"></i> Save Criteria
+          </button>
         </div>
       </div>
     </div>
@@ -405,9 +565,14 @@ const saveScoringSystem = () => {
 }
 
 .event-type-tag.sports { background: #E8F0FF; color: var(--adnu-blue-dark); }
-.event-type-tag.cultural { background: #FFF9E6; color: #B8860B; }
-.event-type-tag.academic { background: #E8F5E9; color: #2E7D32; }
+.event-type-tag.special-events { background: #F3E8FF; color: #7C3AED; }
+.event-type-tag.esports { background: #1A1A2E; color: #00D9FF; }
+.event-type-tag.board-games { background: #FFF5E6; color: #D97706; }
 .event-type-tag.laro-ng-lahi { background: #FFF3E0; color: #E65100; }
+.event-type-tag.litmusda { background: #FCE7F3; color: #DB2777; }
+.event-type-tag.outside-events { background: #D1FAE5; color: #059669; }
+.event-type-tag.indoor-games { background: #E0E7FF; color: #4F46E5; }
+.event-type-tag.default { background: #F3F4F6; color: #374151; }
 
 .event-card-content { padding: 20px; }
 
@@ -743,6 +908,193 @@ const saveScoringSystem = () => {
   margin: 0;
   font-size: 0.8rem;
   color: var(--text-muted);
+}
+
+/* Criteria Configuration */
+.criteria-config {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.criteria-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--bg-gray-light);
+  border-radius: var(--radius-md);
+}
+
+.criteria-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--white);
+  border-radius: 4px;
+}
+
+.criteria-name {
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.criteria-points {
+  font-weight: 700;
+  color: var(--adnu-blue-dark);
+}
+
+.criteria-total {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--adnu-blue-light);
+  border-radius: 4px;
+  font-weight: 700;
+  color: var(--adnu-blue-navy);
+  text-align: right;
+}
+
+.criteria-total.invalid {
+  background: var(--adnu-danger-light);
+  color: var(--adnu-danger);
+}
+
+.btn-manage-criteria {
+  padding: 10px 16px;
+  background: var(--bg-gray-light);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--adnu-blue-dark);
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-manage-criteria:hover {
+  background: var(--adnu-blue-light);
+  border-color: var(--adnu-blue-dark);
+}
+
+/* Criteria Modal */
+.criteria-modal {
+  max-width: 550px;
+  border-top: 6px solid var(--adnu-gold);
+}
+
+.criteria-input-section {
+  margin-bottom: 20px;
+}
+
+.criteria-input-row {
+  align-items: flex-end;
+}
+
+.flex-2 {
+  flex: 2;
+}
+
+.btn-add-criteria {
+  margin-top: 10px;
+  padding: 10px 16px;
+  background: var(--adnu-blue-dark);
+  color: var(--white);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.btn-add-criteria:hover {
+  background: var(--adnu-blue-navy);
+}
+
+.criteria-list-section h4 {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--adnu-blue-navy);
+  text-transform: uppercase;
+  margin: 0 0 12px 0;
+}
+
+.no-criteria {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  background: var(--bg-gray-light);
+  border-radius: var(--radius-md);
+}
+
+.no-criteria i {
+  font-size: 2.5rem;
+  opacity: 0.5;
+}
+
+.no-criteria p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.criteria-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 15px;
+}
+
+.criteria-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--bg-gray-light);
+  border-radius: var(--radius-md);
+}
+
+.btn-remove-criteria {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--white);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.btn-remove-criteria:hover {
+  background: var(--adnu-danger-light);
+  border-color: var(--adnu-danger);
+  color: var(--adnu-danger);
+}
+
+.criteria-total-display {
+  padding: 12px 16px;
+  background: var(--adnu-blue-light);
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  color: var(--adnu-blue-navy);
+  text-align: right;
+  font-size: 1.05rem;
+}
+
+.criteria-total-display.invalid {
+  background: var(--adnu-danger-light);
+  color: var(--adnu-danger);
 }
 
 .modal-actions {

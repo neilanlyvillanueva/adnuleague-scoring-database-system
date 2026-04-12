@@ -1,43 +1,64 @@
 import { reactive, readonly } from 'vue';
 
 const state = reactive({
-  // Events (Sports) - each event has scoring configuration
+  // Pre-defined event categories
+  eventCategories: [
+    'Sports',
+    'Special Events',
+    'Esports',
+    'Board Games',
+    'Laro ng Lahi',
+    'LitMusDa',
+    'Outside Events',
+    'Indoor Games'
+  ],
+
+  // Events - each event has scoring configuration
   events: [
     {
       id: 1,
       name: "Men's Basketball",
       category: 'Sports',
       scoringSystemId: 1,
-      thresholdIncremental: false,
+      matchupSystem: '1v1',
       sets: null,
-      matchupSystem: '1v1'
+      criteria: []
     },
     {
       id: 2,
       name: "Vocal Solo",
-      category: 'Cultural',
-      scoringSystemId: 2,
-      thresholdIncremental: false,
+      category: 'LitMusDa',
+      scoringSystemId: 6,
+      matchupSystem: 'free-for-all',
       sets: null,
-      matchupSystem: 'free-for-all'
+      criteria: [
+        { name: 'Vocal Quality', points: 30 },
+        { name: 'Stage Presence', points: 25 },
+        { name: 'Interpretation', points: 25 },
+        { name: 'Costume & Props', points: 20 }
+      ]
     },
     {
       id: 3,
       name: "General Information Quiz",
       category: 'Academic',
-      scoringSystemId: 1,
-      thresholdIncremental: false,
+      scoringSystemId: 8,
+      matchupSystem: 'free-for-all',
       sets: null,
-      matchupSystem: 'free-for-all'
+      criteria: []
     }
   ],
 
-  // Scoring Systems - pre-defined and custom
+  // Scoring Systems - 8 pre-defined types
   scoringSystems: [
-    { id: 1, name: 'Point-based (Win/Loss)', type: 'predefined', description: 'Winner takes all, loser gets nothing' },
-    { id: 2, name: 'Judged (Criteria)', type: 'predefined', description: 'Scored by judges based on criteria' },
-    { id: 3, name: 'Timed (Race)', type: 'predefined', description: 'Lowest time wins' },
-    { id: 4, name: 'Timed (Speed)', type: 'predefined', description: 'Highest value/score wins' }
+    { id: 1, name: 'Timed Incremental (1v1)', type: 'predefined', description: 'Highest final score wins within X time (e.g., Basketball, Football, Futsal)', matchupSystem: '1v1' },
+    { id: 2, name: 'Ranked Incremental (1v1)', type: 'predefined', description: 'Highest score wins, no time limit (e.g., Scrabble, Billiards, Softball, Dodgeball)', matchupSystem: '1v1' },
+    { id: 3, name: 'Ranked Incremental (FFA)', type: 'predefined', description: 'Highest score wins, no time limit (e.g., Sipa, Darts, Discus, Javelin, Long Jump, Shotput)', matchupSystem: 'free-for-all' },
+    { id: 4, name: 'Threshold Incremental (1v1)', type: 'predefined', description: 'Most set wins, counted by final scores per set (e.g., Volleyball, Badminton)', matchupSystem: '1v1', requiresSets: true },
+    { id: 5, name: 'Ranked Time (FFA)', type: 'predefined', description: 'Ranked by lowest TIME (e.g., Chinese garter, sack race, running, swimming)', matchupSystem: 'free-for-all' },
+    { id: 6, name: 'Criteria Based (FFA)', type: 'predefined', description: 'Highest sum of scores from set criteria (must total 100 points)', matchupSystem: 'free-for-all', requiresCriteria: true },
+    { id: 7, name: 'Judge Based (FFA)', type: 'predefined', description: 'Highest sum of scores from judges (similar to Criteria Based)', matchupSystem: 'free-for-all', requiresCriteria: true },
+    { id: 8, name: 'Win/Lose (FFA)', type: 'predefined', description: 'Win or Lose (1 or 0) (e.g., Sungka, Tug of War, Esports)', matchupSystem: 'free-for-all' }
   ],
 
   // Teams with sport participation
