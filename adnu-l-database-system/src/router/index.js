@@ -15,37 +15,37 @@ const routes = [
     path: '/dashboard',
     name: 'Dashboard',
     component: () => import('../views/dashboard/Dashboard.vue'),
-    meta: { requiresAuth: true, roles: ['admin', 'tabulation'] }
+    meta: { requiresAuth: true, roles: ['admin', 'scorer'] }
   },
   {
     path: '/events',
     name: 'Events',
     component: () => import('../views/events/Events.vue'),
-    meta: { requiresAuth: true, roles: ['admin', 'tabulation'], editableRoles: ['admin', 'tabulation'] }
+    meta: { requiresAuth: true, roles: ['admin', 'scorer'], editableRoles: ['admin', 'scorer'] }
   },
   {
     path: '/teams',
     name: 'Teams',
     component: () => import('../views/teams/Teams.vue'),
-    meta: { requiresAuth: true, roles: ['admin', 'tabulation'], editableRoles: ['admin'] }
+    meta: { requiresAuth: true, roles: ['admin', 'scorer'], editableRoles: ['admin'] }
   },
   {
     path: '/matches',
     name: 'Matches',
     component: () => import('../views/matches/Matches.vue'),
-    meta: { requiresAuth: true, roles: ['admin', 'tabulation'], editableRoles: ['admin', 'tabulation'] }
+    meta: { requiresAuth: true, roles: ['admin', 'scorer'], editableRoles: ['admin', 'scorer'] }
   },
   {
     path: '/leaderboard',
     name: 'Leaderboard',
     component: () => import('../views/leaderboard/Leaderboard.vue'),
-    meta: { requiresAuth: true, roles: ['admin', 'tabulation'], editableRoles: ['admin'] }
+    meta: { requiresAuth: true, roles: ['admin', 'scorer'], editableRoles: ['admin'] }
   },
   {
     path: '/history',
     name: 'History',
     component: () => import('../views/history/History.vue'),
-    meta: { requiresAuth: true, roles: ['admin', 'tabulation'], editableRoles: ['admin'] }
+    meta: { requiresAuth: true, roles: ['admin', 'scorer'], editableRoles: ['admin'] }
   }
 ]
 
@@ -77,7 +77,12 @@ router.beforeEach((to, from, next) => {
 
     // Role-Based Access Control (RBAC)
     // Check if the route has specific role requirements
-    if (to.meta.roles && !to.meta.roles.includes(userRole)) {
+    // Note: 'tabulation' role is treated as 'scorer' in the backend
+    const normalizedRole = userRole === 'tabulation' ? 'scorer' : userRole;
+    const allowedRoles = to.meta.roles || [];
+    const normalizedAllowedRoles = allowedRoles.map(r => r === 'tabulation' ? 'scorer' : r);
+
+    if (!normalizedAllowedRoles.includes(normalizedRole)) {
       console.warn(`Access denied for role: ${userRole}`);
       return next('/dashboard'); // Redirect unauthorized roles to a safe page
     }

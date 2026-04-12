@@ -1,6 +1,5 @@
 import { reactive, readonly, computed } from 'vue';
-
-const API_BASE_URL = 'http://localhost:5000';
+import axios from 'axios';
 
 const state = reactive({
   user: null,
@@ -14,24 +13,11 @@ const login = async (username, password, role) => {
   state.isLoading = true;
 
   try {
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ username, password, role })
-    });
+    const response = await axios.post('/auth/login', { username, password, role });
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      state.isLoading = false;
-      throw new Error(data.error || 'Login failed');
-    }
-
-    state.user = data.user;
-    state.isAuthenticated = true;
     state.isLoading = false;
+    state.user = response.data.user;
+    state.isAuthenticated = true;
 
     // Persist to localStorage
     localStorage.setItem('adnl_user', JSON.stringify(state.user));
@@ -40,15 +26,13 @@ const login = async (username, password, role) => {
     return state.user;
   } catch (error) {
     state.isLoading = false;
-    throw error;
+    throw new Error(error.response?.data?.error || 'Login failed');
   }
 };
 
 const logout = async () => {
   try {
-    await fetch(`${API_BASE_URL}/auth/logout`, {
-      method: 'POST'
-    });
+    await axios.post('/auth/logout');
   } catch (error) {
     console.error('Logout error:', error);
   }

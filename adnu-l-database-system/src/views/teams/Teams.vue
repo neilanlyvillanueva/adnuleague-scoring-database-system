@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import PageHeader from '../../components/common/PageHeader.vue';
 import BaseModal from '../../components/modals/BaseModal.vue';
 import { useStore } from '../../composables/useStore';
@@ -8,7 +8,12 @@ import { useAuth } from '../../composables/useAuth';
 const { userRole } = useAuth();
 const isAdmin = computed(() => userRole.value === 'admin');
 
-const { state, addTeam, updateTeam, deleteTeam, toggleTeamSportParticipation } = useStore();
+const { state, addTeam, updateTeam, deleteTeam, toggleTeamSportParticipation, fetchTeams, fetchEvents } = useStore();
+
+// Fetch data on mount
+onMounted(async () => {
+  await Promise.all([fetchTeams(), fetchEvents()]);
+});
 
 const showModal = ref(false);
 const showParticipationModal = ref(false);

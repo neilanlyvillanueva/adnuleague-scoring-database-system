@@ -1,4 +1,5 @@
-import { reactive, readonly } from 'vue';
+import { reactive, readonly, ref } from 'vue';
+import axios from 'axios';
 
 const state = reactive({
   // Pre-defined event categories
@@ -13,43 +14,10 @@ const state = reactive({
     'Indoor Games'
   ],
 
-  // Events - each event has scoring configuration
-  events: [
-    {
-      id: 1,
-      name: "Men's Basketball",
-      category: 'Sports',
-      scoringSystemId: 1,
-      matchupSystem: '1v1',
-      sets: null,
-      criteria: []
-    },
-    {
-      id: 2,
-      name: "Vocal Solo",
-      category: 'LitMusDa',
-      scoringSystemId: 6,
-      matchupSystem: 'free-for-all',
-      sets: null,
-      criteria: [
-        { name: 'Vocal Quality', points: 30 },
-        { name: 'Stage Presence', points: 25 },
-        { name: 'Interpretation', points: 25 },
-        { name: 'Costume & Props', points: 20 }
-      ]
-    },
-    {
-      id: 3,
-      name: "General Information Quiz",
-      category: 'Academic',
-      scoringSystemId: 8,
-      matchupSystem: 'free-for-all',
-      sets: null,
-      criteria: []
-    }
-  ],
+  // Events - fetched from backend
+  events: [],
 
-  // Scoring Systems - 8 pre-defined types
+  // Scoring Systems - pre-defined types (static reference)
   scoringSystems: [
     { id: 1, name: 'Timed Incremental (1v1)', type: 'predefined', description: 'Highest final score wins within X time (e.g., Basketball, Football, Futsal)', matchupSystem: '1v1' },
     { id: 2, name: 'Ranked Incremental (1v1)', type: 'predefined', description: 'Highest score wins, no time limit (e.g., Scrabble, Billiards, Softball, Dodgeball)', matchupSystem: '1v1' },
@@ -61,180 +29,324 @@ const state = reactive({
     { id: 8, name: 'Win/Lose (FFA)', type: 'predefined', description: 'Win or Lose (1 or 0) (e.g., Sungka, Tug of War, Esports)', matchupSystem: 'free-for-all' }
   ],
 
-  // Teams with sport participation
-  teams: [
-    { id: 1, name: 'Business & Accountancy', color: '#0038A8', participatingSports: [1, 2, 3] },
-    { id: 2, name: 'Engineering', color: '#FFD700', participatingSports: [1, 2, 3] },
-    { id: 3, name: 'Arts & Sciences', color: '#FF4D4D', participatingSports: [1, 3] },
-    { id: 4, name: 'Computer Studies', color: '#1A202C', participatingSports: [1, 2, 3] }
-  ],
+  // Teams - fetched from backend
+  teams: [],
 
-  // Matches - ongoing and completed
-  matches: [
-    {
-      id: 1,
-      eventId: 1,
-      matchupType: '1v1',
-      teamAId: 1,
-      teamBId: 2,
-      participants: [],
-      status: 'ongoing',
-      scores: { teamA: 0, teamB: 0 },
-      setScores: [],
-      venue: 'Main Gymnasium'
-    }
-  ],
+  // Matches - fetched from backend
+  matches: [],
 
-  // Leaderboard - win tallies per team
-  leaderboard: [
-    { teamId: 1, wins: 5 },
-    { teamId: 2, wins: 3 },
-    { teamId: 3, wins: 4 },
-    { teamId: 4, wins: 2 }
-  ]
+  // Leaderboard - fetched from backend
+  leaderboard: []
 });
 
-export function useStore() {
-  const addEvent = (event) => {
-    const newId = state.events.length > 0 ? Math.max(...state.events.map(e => e.id)) + 1 : 1;
-    state.events.push({ ...event, id: newId });
-    return newId;
-  };
+const loading = ref({
+  events: false,
+  teams: false,
+  matches: false,
+  leaderboard: false
+});
 
-  const updateEvent = (id, updates) => {
+const error = ref(null);
+
+// API fetch functions
+const fetchEvents = async () => {
+  loading.value.events = true;
+  try {
+    const response = await axios.get('/api/sports');
+    state.events = response.data;
+  } catch (err) {
+    console.error('Failed to fetch events:', err);
+    error.value = 'Failed to load events';
+  } finally {
+    loading.value.events = false;
+  }
+};
+
+const fetchTeams = async () => {
+  loading.value.teams = true;
+  try {
+    const response = await axios.get('/api/teams');
+    console.log('Fetched teams - response.data:', response.data);
+    console.log('Is array?', Array.isArray(response.data));
+    console.log('Response type:', typeof response.data);
+    // Ensure response.data is an array
+    const teamsData = Array.isArray(response.data) ? response.data : [];
+    console.log('Teams data to use:', teamsData);
+    // Ensure reactivity by replacing the entire array
+    state.teams.splice(0, state.teams.length, ...teamsData);
+    console.log('State teams after update:', state.teams);
+    console.log('State teams length:', state.teams.length);
+  } catch (err) {
+    console.error('Failed to fetch teams:', err);
+    error.value = 'Failed to load teams';
+  } finally {
+    loading.value.teams = false;
+  }
+};
+
+const fetchMatches = async () => {
+  loading.value.matches = true;
+  try {
+    const response = await axios.get('/api/games');
+    state.matches = response.data.map(match => ({
+      ...match,
+      matchupType: match.matchupType || '1v1',
+      status: match.status || 'ongoing'
+    }));
+  } catch (err) {
+    console.error('Failed to fetch matches:', err);
+    error.value = 'Failed to load matches';
+  } finally {
+    loading.value.matches = false;
+  }
+};
+
+const fetchLeaderboard = async () => {
+  loading.value.leaderboard = true;
+  try {
+    const response = await axios.get('/api/leaderboard');
+    state.leaderboard = response.data;
+  } catch (err) {
+    console.error('Failed to fetch leaderboard:', err);
+    error.value = 'Failed to load leaderboard';
+  } finally {
+    loading.value.leaderboard = false;
+  }
+};
+
+// Fetch all data
+const fetchAllData = async () => {
+  await Promise.all([
+    fetchEvents(),
+    fetchTeams(),
+    fetchMatches(),
+    fetchLeaderboard()
+  ]);
+};
+
+// Team operations
+const addTeam = async (team) => {
+  try {
+    const response = await axios.post('/api/teams', { name: team.name, color: team.color });
+    // Refresh teams list to ensure the new team is displayed
+    await fetchTeams();
+    return response.data;
+  } catch (err) {
+    console.error('Failed to add team:', err);
+    throw new Error(err.response?.data?.error || 'Failed to add team');
+  }
+};
+
+const updateTeam = async (id, updates) => {
+  try {
+    const response = await axios.put(`/api/teams/${id}`, updates);
+    await fetchTeams();
+    return response.data;
+  } catch (err) {
+    console.error('Failed to update team:', err);
+    throw new Error(err.response?.data?.error || 'Failed to update team');
+  }
+};
+
+const deleteTeam = async (id) => {
+  try {
+    await axios.delete(`/api/teams/${id}`);
+    await fetchTeams();
+  } catch (err) {
+    console.error('Failed to delete team:', err);
+    throw new Error(err.response?.data?.error || 'Failed to delete team');
+  }
+};
+
+const toggleTeamSportParticipation = async (teamId, sportId) => {
+  try {
+    const response = await axios.post(`/api/teams/${teamId}/participation/${sportId}`);
+    const index = state.teams.findIndex(t => t.id === teamId);
+    if (index !== -1) {
+      state.teams[index] = response.data.team;
+    }
+    return response.data;
+  } catch (err) {
+    console.error('Failed to toggle participation:', err);
+    throw new Error(err.response?.data?.error || 'Failed to update participation');
+  }
+};
+
+// Event/Sport operations
+const addEvent = async (event) => {
+  try {
+    const criteria = event.criteria?.map(c => ({ name: c.name, points: c.points })) || [];
+    const response = await axios.post('/api/sports', {
+      name: event.name,
+      category: event.category,
+      scoringSystemId: event.scoringSystemId,
+      matchupSystem: event.matchupSystem,
+      sets: event.sets,
+      criteria
+    });
+    state.events.push(response.data);
+    return response.data;
+  } catch (err) {
+    console.error('Failed to add event:', err);
+    throw new Error(err.response?.data?.error || 'Failed to add event');
+  }
+};
+
+const updateEvent = async (id, updates) => {
+  try {
+    const criteria = updates.criteria?.map(c => ({ name: c.name, points: c.points })) || [];
+    const response = await axios.put(`/api/sports/${id}`, { ...updates, criteria });
     const index = state.events.findIndex(e => e.id === id);
     if (index !== -1) {
-      state.events[index] = { ...state.events[index], ...updates };
+      state.events[index] = response.data;
     }
-  };
+    return response.data;
+  } catch (err) {
+    console.error('Failed to update event:', err);
+    throw new Error(err.response?.data?.error || 'Failed to update event');
+  }
+};
 
-  const deleteEvent = (id) => {
-    const index = state.events.findIndex(e => e.id === id);
-    if (index !== -1) {
-      state.events.splice(index, 1);
-    }
-  };
+const deleteEvent = async (id) => {
+  try {
+    await axios.delete(`/api/sports/${id}`);
+    state.events = state.events.filter(e => e.id !== id);
+  } catch (err) {
+    console.error('Failed to delete event:', err);
+    throw new Error(err.response?.data?.error || 'Failed to delete event');
+  }
+};
 
-  const getEvent = (id) => state.events.find(e => e.id === id);
+// Match operations
+const addMatch = async (match) => {
+  try {
+    const payload = {
+      eventId: match.eventId,
+      matchupType: match.matchupType,
+      teamAId: match.teamAId,
+      teamBId: match.teamBId,
+      participants: match.participants || [],
+      venue: match.venue
+    };
+    const response = await axios.post('/api/games', payload);
+    state.matches.unshift(response.data);
+    return response.data;
+  } catch (err) {
+    console.error('Failed to add match:', err);
+    throw new Error(err.response?.data?.error || 'Failed to add match');
+  }
+};
 
-  // Scoring Systems
-  const addScoringSystem = (system) => {
-    const newId = state.scoringSystems.length > 0 ? Math.max(...state.scoringSystems.map(s => s.id)) + 1 : 1;
-    state.scoringSystems.push({ ...system, id: newId, type: 'custom' });
-    return newId;
-  };
-
-  const getScoringSystem = (id) => state.scoringSystems.find(s => s.id === id);
-  const getScoringSystems = () => state.scoringSystems;
-
-  // Teams
-  const addTeam = (team) => {
-    const newId = state.teams.length > 0 ? Math.max(...state.teams.map(t => t.id)) + 1 : 1;
-    state.teams.push({ ...team, id: newId, participatingSports: team.participatingSports || [] });
-    return newId;
-  };
-
-  const updateTeam = (id, updates) => {
-    const index = state.teams.findIndex(t => t.id === id);
-    if (index !== -1) {
-      state.teams[index] = { ...state.teams[index], ...updates };
-    }
-  };
-
-  const deleteTeam = (id) => {
-    const index = state.teams.findIndex(t => t.id === id);
-    if (index !== -1) {
-      state.teams.splice(index, 1);
-    }
-  };
-
-  const getTeam = (id) => state.teams.find(t => t.id === id);
-
-  const toggleTeamSportParticipation = (teamId, sportId) => {
-    const team = state.teams.find(t => t.id === teamId);
-    if (team) {
-      const index = team.participatingSports.indexOf(sportId);
-      if (index === -1) {
-        team.participatingSports.push(sportId);
-      } else {
-        team.participatingSports.splice(index, 1);
-      }
-    }
-  };
-
-  // Matches
-  const addMatch = (match) => {
-    const newId = state.matches.length > 0 ? Math.max(...state.matches.map(m => m.id)) + 1 : 1;
-    state.matches.push({ ...match, id: newId, status: 'ongoing' });
-    return newId;
-  };
-
-  const updateMatch = (id, updates) => {
+const updateMatch = async (id, updates) => {
+  try {
+    // Note: Backend may not have a direct update endpoint, adjust as needed
     const index = state.matches.findIndex(m => m.id === id);
     if (index !== -1) {
       state.matches[index] = { ...state.matches[index], ...updates };
     }
-  };
+    return updates;
+  } catch (err) {
+    console.error('Failed to update match:', err);
+    throw new Error(err.response?.data?.error || 'Failed to update match');
+  }
+};
 
-  const finalizeMatch = (id, finalData) => {
+const finalizeMatch = async (id, finalData) => {
+  try {
+    const response = await axios.post(`/api/games/${id}/finalize`, finalData);
     const index = state.matches.findIndex(m => m.id === id);
     if (index !== -1) {
-      state.matches[index] = { ...state.matches[index], ...finalData, status: 'completed' };
+      state.matches[index] = response.data;
     }
-  };
+    // Refresh leaderboard after finalizing
+    await fetchLeaderboard();
+    return response.data;
+  } catch (err) {
+    console.error('Failed to finalize match:', err);
+    throw new Error(err.response?.data?.error || 'Failed to finalize match');
+  }
+};
 
-  const deleteMatch = (id) => {
-    const index = state.matches.findIndex(m => m.id === id);
-    if (index !== -1) {
-      state.matches.splice(index, 1);
-    }
-  };
+const deleteMatch = async (id) => {
+  try {
+    await axios.delete(`/api/games/${id}`);
+    state.matches = state.matches.filter(m => m.id !== id);
+  } catch (err) {
+    console.error('Failed to delete match:', err);
+    throw new Error(err.response?.data?.error || 'Failed to delete match');
+  }
+};
 
-  const getMatch = (id) => state.matches.find(m => m.id === id);
+// Helper functions
+const getEvent = (id) => state.events.find(e => e.id === id);
+const getTeam = (id) => state.teams.find(t => t.id === id);
+const getMatch = (id) => state.matches.find(m => m.id === id);
+const getScoringSystem = (id) => state.scoringSystems.find(s => s.id === id);
+const getScoringSystems = () => state.scoringSystems;
 
-  // Leaderboard
-  const updateTeamWins = (teamId, winsDelta) => {
-    const entry = state.leaderboard.find(l => l.teamId === teamId);
-    if (entry) {
-      entry.wins += winsDelta;
-    } else {
-      state.leaderboard.push({ teamId, wins: winsDelta });
-    }
-  };
+const getLeaderboard = () => {
+  return [...state.leaderboard]
+    .map(entry => {
+      const team = state.teams.find(t => t.id === entry.teamId);
+      return {
+        ...entry,
+        teamName: entry.teamName || team?.name || 'Unknown',
+        teamColor: entry.teamColor || team?.color || '#ccc'
+      };
+    })
+    .sort((a, b) => b.wins - a.wins);
+};
 
-  const getLeaderboard = () => {
-    return [...state.leaderboard]
-      .map(entry => {
-        const team = state.teams.find(t => t.id === entry.teamId);
-        return {
-          ...entry,
-          teamName: team?.name || 'Unknown',
-          teamColor: team?.color || '#ccc'
-        };
-      })
-      .sort((a, b) => b.wins - a.wins);
-  };
+// Legacy function - wins are now tracked on backend
+const updateTeamWins = async (teamId, winsDelta) => {
+  // Wins are automatically updated on the backend when matches are finalized
+  // This function is kept for backwards compatibility but doesn't need to do anything
+  console.log('Team wins updated:', teamId, winsDelta);
+  await fetchLeaderboard();
+};
 
+const addScoringSystem = (system) => {
+  // Scoring systems are predefined and static
+  // This is kept for UI compatibility but doesn't persist to backend
+  const newId = state.scoringSystems.length + 1;
+  state.scoringSystems.push({ ...system, id: newId, type: 'custom' });
+  return newId;
+};
+
+export function useStore() {
   return {
     state: readonly(state),
+    loading: readonly(loading),
+    error,
     scoringSystems: readonly(state.scoringSystems),
+    // Data fetching
+    fetchAllData,
+    fetchEvents,
+    fetchTeams,
+    fetchMatches,
+    fetchLeaderboard,
+    // Event operations
     addEvent,
     updateEvent,
     deleteEvent,
     getEvent,
+    // Scoring system operations
     addScoringSystem,
     getScoringSystem,
     getScoringSystems,
+    // Team operations
     addTeam,
     updateTeam,
     deleteTeam,
     getTeam,
     toggleTeamSportParticipation,
+    // Match operations
     addMatch,
     updateMatch,
     finalizeMatch,
     deleteMatch,
     getMatch,
+    // Leaderboard operations
     updateTeamWins,
     getLeaderboard
   };

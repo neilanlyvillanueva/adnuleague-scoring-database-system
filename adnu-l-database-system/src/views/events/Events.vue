@@ -1,12 +1,17 @@
 <script setup>
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { useStore } from '../../composables/useStore';
 import { useAuth } from '../../composables/useAuth';
 
 const { userRole } = useAuth();
 const isAdmin = computed(() => userRole.value === 'admin');
 
-const { state, addEvent, updateEvent, deleteEvent, addScoringSystem } = useStore();
+const { state, addEvent, updateEvent, deleteEvent, addScoringSystem, fetchEvents } = useStore();
+
+// Fetch data on mount
+onMounted(async () => {
+  await fetchEvents();
+});
 
 const activeFilter = ref('All');
 

@@ -1,12 +1,17 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useStore } from '../../composables/useStore';
 import { useAuth } from '../../composables/useAuth';
 
 const { userRole } = useAuth();
 const isAdmin = computed(() => userRole.value === 'admin');
 
-const { state } = useStore();
+const { state, fetchEvents, fetchTeams, fetchMatches } = useStore();
+
+// Fetch data on mount
+onMounted(async () => {
+  await Promise.all([fetchEvents(), fetchTeams(), fetchMatches()]);
+});
 
 const filterType = ref('all'); // all, completed, ongoing
 const searchQuery = ref('');
@@ -539,15 +544,18 @@ const getWinnerName = (match) => {
 
 /* No Matches */
 .no-matches {
-  text-align: center;
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
   padding: 60px 20px;
   color: var(--text-muted);
 }
 
 .no-matches i {
   font-size: 3rem;
-  display: block;
-  margin-bottom: 12px;
   opacity: 0.5;
 }
 

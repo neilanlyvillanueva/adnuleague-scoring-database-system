@@ -1,14 +1,19 @@
 <script setup>
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { useStore } from '../../composables/useStore';
 
-const { state, getLeaderboard } = useStore();
+const { state, getLeaderboard, fetchMatches, fetchLeaderboard } = useStore();
 
 const dynamicData = reactive({
   userName: 'Admin User'
 });
 
 const currentDate = ref(new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }));
+
+// Fetch data on mount
+onMounted(async () => {
+  await Promise.all([fetchMatches(), fetchLeaderboard()]);
+});
 
 // Modal Logic
 const isModalOpen = ref(false);

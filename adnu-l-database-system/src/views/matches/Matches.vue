@@ -1,12 +1,17 @@
 <script setup>
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { useStore } from '../../composables/useStore';
 import { useAuth } from '../../composables/useAuth';
 
 const { userRole } = useAuth();
 const isAdmin = computed(() => userRole.value === 'admin');
 
-const { state, addMatch, updateMatch, finalizeMatch, deleteMatch, updateTeamWins, getLeaderboard, scoringSystems } = useStore();
+const { state, addMatch, updateMatch, finalizeMatch, deleteMatch, updateTeamWins, getLeaderboard, scoringSystems, fetchEvents, fetchTeams, fetchMatches } = useStore();
+
+// Fetch all data on mount
+onMounted(async () => {
+  await Promise.all([fetchEvents(), fetchTeams(), fetchMatches()]);
+});
 
 const showModal = ref(false);
 const showFinalizeModal = ref(false);

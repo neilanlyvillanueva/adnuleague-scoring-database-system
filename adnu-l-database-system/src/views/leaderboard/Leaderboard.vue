@@ -1,12 +1,17 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useStore } from '../../composables/useStore';
 
-const { state, getLeaderboard } = useStore();
+const { state, getLeaderboard, fetchTeams, fetchLeaderboard } = useStore();
 
 const leaderboard = computed(() => getLeaderboard());
 
 const getTeam = (teamId) => state.teams.find(t => t.id === teamId);
+
+// Fetch data on mount
+onMounted(async () => {
+  await Promise.all([fetchTeams(), fetchLeaderboard()]);
+});
 
 // Calculate podium positions
 const podiumTeams = computed(() => leaderboard.value.slice(0, 3));

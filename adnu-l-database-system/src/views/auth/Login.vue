@@ -2,9 +2,11 @@
 import { ref, reactive } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuth } from '../../composables/useAuth';
+import { useStore } from '../../composables/useStore';
 
 const router = useRouter();
-const { login, state } = useAuth();
+const { login, state: authState } = useAuth();
+const { fetchAllData, state: storeState } = useStore();
 
 const form = reactive({
   username: '',
@@ -14,6 +16,7 @@ const form = reactive({
 
 const error = ref('');
 const showPassword = ref(false);
+const isLoading = ref(false);
 
 const handleSubmit = async () => {
   error.value = '';
@@ -28,11 +31,17 @@ const handleSubmit = async () => {
     return;
   }
 
+  isLoading.value = true;
+
   try {
     await login(form.username, form.password, form.role);
+    // Fetch all data after successful login
+    await fetchAllData();
     router.push('/dashboard');
   } catch (err) {
-    error.value = 'Invalid username or password';
+    error.value = err.message || 'Invalid username or password';
+  } finally {
+    isLoading.value = false;
   }
 };
 </script>
@@ -68,7 +77,7 @@ const handleSubmit = async () => {
               type="text"
               class="form-input"
               placeholder="Enter your username"
-              :disabled="state.isLoading"
+              :disabled="isLoading"
               autocomplete="username"
             />
           </div>
@@ -85,7 +94,7 @@ const handleSubmit = async () => {
                 :type="showPassword ? 'text' : 'password'"
                 class="form-input"
                 placeholder="Enter your password"
-                :disabled="state.isLoading"
+                :disabled="isLoading"
                 autocomplete="current-password"
               />
               <button
@@ -129,8 +138,8 @@ const handleSubmit = async () => {
             {{ error }}
           </div>
 
-          <button type="submit" class="login-btn" :disabled="state.isLoading">
-            <span v-if="!state.isLoading">
+          <button type="submit" class="login-btn" :disabled="isLoading">
+            <span v-if="!isLoading">
               <i class="fas fa-sign-in-alt"></i>
               Sign In
             </span>
