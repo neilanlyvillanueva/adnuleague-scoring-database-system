@@ -121,13 +121,30 @@ class Game(db.Model):
                 'finalScore': float(r.final_score) if r.final_score else 0,
                 'isWinner': r.is_winner
             })
+
+        # Extract team IDs and scores for frontend compatibility
+        team_ids = [r.team_id for r in self.results]
+        scores = {}
+        for r in self.results:
+            scores[str(r.team_id)] = float(r.final_score) if r.final_score else 0
+
+        # Normalize status to lowercase for frontend filtering
+        status = self.game_status.lower() if self.game_status else 'ongoing'
+
         return {
             'id': self.game_id,
+            'eventId': self.sport_id,  # Alias for frontend compatibility
             'sportId': self.sport_id,
             'venue': self.venue,
+            'matchupType': self.sport.matchup_type if self.sport else '1v1',
+            'teamAId': team_ids[0] if len(team_ids) >= 1 else None,
+            'teamBId': team_ids[1] if len(team_ids) >= 2 else None,
+            'participants': team_ids,  # For FFA matches
+            'scores': scores,  # {teamId: score} format
             'schoolYear': self.school_year,
             'season': self.season,
-            'status': self.game_status,
+            'status': status,  # lowercase: 'ongoing', 'completed', 'upcoming'
+            'winner': next((r.team_id for r in self.results if r.is_winner), None),
             'results': results_data
         }
 

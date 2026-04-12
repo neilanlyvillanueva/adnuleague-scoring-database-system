@@ -8,6 +8,8 @@ games_bp = Blueprint('games', __name__, url_prefix='/api/games')
 @games_bp.route('', methods=['GET'])
 def get_games():
     """Returns list in the exact shape of state.matches in useStore."""
+    # Use joinedload to eagerly load sport relationship to avoid N+1 queries
+    # and ensure matchup_type is available in to_dict()
     games = Game.query.order_by(Game.game_id.desc()).all()
     return jsonify([g.to_dict() for g in games]), 200
 

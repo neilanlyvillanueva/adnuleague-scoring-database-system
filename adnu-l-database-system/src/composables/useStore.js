@@ -88,11 +88,32 @@ const fetchMatches = async () => {
   loading.value.matches = true;
   try {
     const response = await axios.get('/api/games');
-    const matchesData = response.data.map(match => ({
-      ...match,
-      matchupType: match.matchupType || '1v1',
-      status: match.status || 'ongoing'
-    }));
+    const matchesData = response.data.map(match => {
+      // Convert backend scores {teamId: score} to frontend format {teamA, teamB} for 1v1
+      let scores = {};
+      if (match.matchupType === '1v1' || (match.sport && match.sport.matchup_type === '1v1')) {
+        // For 1v1, convert teamId keys to teamA/teamB
+        const teamIds = match.participants || Object.keys(match.scores || {}).map(Number);
+        scores = {
+          teamA: match.scores?.[teamIds[0]] ?? match.scores?.[teamIds[0]?.toString()] ?? 0,
+          teamB: match.scores?.[teamIds[1]] ?? match.scores?.[teamIds[1]?.toString()] ?? 0
+        };
+      } else {
+        // For FFA, keep teamId keys
+        scores = match.scores || {};
+      }
+
+      return {
+        ...match,
+        eventId: match.eventId || match.sportId,
+        matchupType: match.matchupType || match.sport?.matchup_type || '1v1',
+        status: (match.status || 'ongoing').toLowerCase(),
+        participants: match.participants || (match.results?.map(r => r.teamId) || []),
+        teamAId: match.teamAId || match.participants?.[0],
+        teamBId: match.teamBId || match.participants?.[1],
+        scores
+      };
+    });
     // Ensure reactivity by replacing the entire array
     state.matches.splice(0, state.matches.length, ...matchesData);
   } catch (err) {
@@ -231,9 +252,31 @@ const addMatch = async (match) => {
       venue: match.venue
     };
     const response = await axios.post('/api/games', payload);
+    // Normalize the response data to match frontend expectations
+    const newMatch = {
+      ...response.data,
+      eventId: response.data.eventId || response.data.sportId,
+      matchupType: response.data.matchupType || '1v1',
+      status: (response.data.status || 'ongoing').toLowerCase(),
+      participants: response.data.participants || [],
+      teamAId: response.data.teamAId || response.data.participants?.[0],
+      teamBId: response.data.teamBId || response.data.participants?.[1],
+      // Convert backend scores {teamId: score} to frontend format {teamA, teamB} for 1v1
+      scores: (() => {
+        const scores = response.data.scores || {};
+        if (response.data.matchupType === '1v1') {
+          const teamIds = response.data.participants || Object.keys(scores).map(Number);
+          return {
+            teamA: scores[teamIds[0]] ?? scores[teamIds[0]?.toString()] ?? 0,
+            teamB: scores[teamIds[1]] ?? scores[teamIds[1]?.toString()] ?? 0
+          };
+        }
+        return scores;
+      })()
+    };
     // Ensure reactivity by replacing the entire array
-    state.matches.splice(0, 0, response.data);
-    return response.data;
+    state.matches.splice(0, 0, newMatch);
+    return newMatch;
   } catch (err) {
     console.error('Failed to add match:', err);
     throw new Error(err.response?.data?.error || 'Failed to add match');
@@ -259,7 +302,29 @@ const finalizeMatch = async (id, finalData) => {
     const response = await axios.post(`/api/games/${id}/finalize`, finalData);
     const index = state.matches.findIndex(m => m.id === id);
     if (index !== -1) {
-      state.matches[index] = response.data;
+      // Normalize the response data to match frontend expectations
+      const updatedMatch = {
+        ...response.data,
+        eventId: response.data.eventId || response.data.sportId,
+        matchupType: response.data.matchupType || '1v1',
+        status: (response.data.status || 'ongoing').toLowerCase(),
+        participants: response.data.participants || [],
+        teamAId: response.data.teamAId || response.data.participants?.[0],
+        teamBId: response.data.teamBId || response.data.participants?.[1],
+        // Convert backend scores {teamId: score} to frontend format {teamA, teamB} for 1v1
+        scores: (() => {
+          const scores = response.data.scores || {};
+          if (response.data.matchupType === '1v1') {
+            const teamIds = response.data.participants || Object.keys(scores).map(Number);
+            return {
+              teamA: scores[teamIds[0]] ?? scores[teamIds[0]?.toString()] ?? 0,
+              teamB: scores[teamIds[1]] ?? scores[teamIds[1]?.toString()] ?? 0
+            };
+          }
+          return scores;
+        })()
+      };
+      state.matches[index] = updatedMatch;
     }
     // Refresh leaderboard after finalizing
     await fetchLeaderboard();
