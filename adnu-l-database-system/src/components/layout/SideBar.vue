@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router';
 import { useAuth } from '../../composables/useAuth';
 
 const router = useRouter();
-const { logout, userRole } = useAuth();
+const { logout, clearAuthState, userRole } = useAuth();
 
 const dynamicData = reactive({
   systemTitle: localStorage.getItem('adnl_system_title') || 'ADNL S3',
@@ -54,9 +54,14 @@ const saveEdit = () => {
   closeModal();
 };
 
-const handleLogout = () => {
-  logout();
-  router.push('/login');
+const handleLogout = async () => {
+  console.log('Logout clicked');
+  await logout();
+  console.log('Logout API called');
+  clearAuthState();
+  console.log('Auth state cleared');
+  await router.push('/login');
+  console.log('Navigated to login');
 };
 
 // Emit collapsed state to parent
@@ -98,9 +103,9 @@ const toggleCollapse = () => {
 
     <div class="sidebar-footer">
       <div class="footer-divider" v-if="!isCollapsed"></div>
-      <button class="logout-btn" @click="handleLogout" :title="isCollapsed ? 'Exit' : ''">
-        <i class="fas fa-sign-out-alt"></i>
-        <span v-if="!isCollapsed">Exit</span>
+      <button type="button" class="logout-btn" @click.stop="handleLogout" :title="isCollapsed ? 'Exit' : ''">
+        <i class="fas fa-sign-out-alt" style="pointer-events: none;"></i>
+        <span v-if="!isCollapsed" style="pointer-events: none;">Exit</span>
       </button>
     </div>
 

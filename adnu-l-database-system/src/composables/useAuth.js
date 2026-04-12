@@ -58,13 +58,15 @@ const logout = async () => {
     }
   } catch (error) {
     console.error('Logout error:', error);
-  } finally {
-    state.user = null;
-    state.isAuthenticated = false;
-    localStorage.removeItem('adnl_user');
-    localStorage.removeItem('adnl_auth');
-    localStorage.removeItem('adnl_token');
   }
+};
+
+const clearAuthState = () => {
+  state.user = null;
+  state.isAuthenticated = false;
+  localStorage.removeItem('adnl_user');
+  localStorage.removeItem('adnl_auth');
+  localStorage.removeItem('adnl_token');
 };
 
 const checkAuth = () => {
@@ -86,6 +88,7 @@ export function useAuth() {
     userRole: readonly(userRole),
     login,
     logout,
+    clearAuthState,
     checkAuth,
     isAuthenticated: () => state.isAuthenticated
   };
