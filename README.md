@@ -1,5 +1,3 @@
-# adnuleague-scoring-database-system
-
 # ADNU League Scoring & Database System
 
 A comprehensive web-based scoring and management system for ADNU League events and competitions.
