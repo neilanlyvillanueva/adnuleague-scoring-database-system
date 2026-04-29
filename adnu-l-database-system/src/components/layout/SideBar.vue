@@ -28,14 +28,9 @@ const allNavItems = ref([
 ]);
 
 const visibleNavItems = computed(() => {
-  // Tabulation users should see all nav items (they're scorers with limited edit permissions)
   const currentRole = userRole.value;
   return allNavItems.value.filter(item => {
-    // Tabulation/scorer roles can see all navigation
-    if (currentRole === 'scorer' || currentRole === 'tabulation') {
-      return item.roles.includes('admin') || item.roles.includes('tabulation');
-    }
-    return item.roles.includes(currentRole);
+    return item.roles.includes('admin') || item.roles.includes('tabulation') || item.roles.includes(currentRole);
   });
 });
 
